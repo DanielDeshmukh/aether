@@ -1,3 +1,11 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #000000;
+    color: #FFFFFF;
+    @apply overflow-x-hidden;
+  }
+}
