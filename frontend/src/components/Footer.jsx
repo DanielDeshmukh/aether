@@ -1,5 +1,6 @@
 import React from 'react';
 import logo from '/images/logo.png';
+import { Link } from 'react-router-dom';
 
 const Footer = () => {
   return (
@@ -35,7 +36,9 @@ const Footer = () => {
             <div className="flex flex-col gap-4 text-[10px] tracking-[0.2em] text-lambo-ash uppercase font-bold">
               <a href="#" className="hover:text-lambo-white transition-colors">Security</a>
               <a href="#" className="hover:text-lambo-white transition-colors">Legal</a>
-              <a href="#" className="hover:text-lambo-white transition-colors text-lambo-gold">Join Us</a>
+               <Link to="/join-us">
+              <a href="#" className="hover:text-lambo-gold transition-colors text-lambo-gold">Join Us</a>
+               </Link>
             </div>
           </div>
         </div>

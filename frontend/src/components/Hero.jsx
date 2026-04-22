@@ -1,5 +1,5 @@
 import React from 'react';
-
+import { Link } from 'react-router-dom';
 const Hero = () => {
   return (
     <section className="relative min-h-screen flex items-center bg-lambo-black pt-24 pb-20 md:pt-32 md:pb-24 overflow-hidden">
@@ -18,9 +18,12 @@ const Hero = () => {
               <span className="text-lambo-white/60">Simulating human-expert logic for autonomous penetration testing.</span>
             </p>
             <div className="flex flex-col sm:flex-row gap-3 md:gap-5">
+               <Link to="/join-us">
+
               <button className="w-full sm:w-auto bg-lambo-gold text-lambo-black px-6 md:px-12 py-3 md:py-4 text-xs font-black tracking-[0.2em] transition-colors hover:bg-lambo-gold-dark shadow-[0_5px_10px_-5px_rgba(255,192,0,0.2)]">
                 JOIN THE VANGUARD
               </button>
+               </Link>
               <button className="w-full sm:w-auto border border-lambo-white text-lambo-white px-6 md:px-12 py-3 md:py-4 text-xs font-black tracking-[0.2em] transition-colors hover:bg-lambo-white/10 uppercase">
                 Explore Feed
               </button>
