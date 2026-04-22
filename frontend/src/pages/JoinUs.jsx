@@ -12,7 +12,7 @@ const JoinUs = () => {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: 'http://localhost:5173',
+        emailRedirectTo: 'http://localhost:5173/home',
       },
     });
     if (error) console.error('Error sending magic link:', error);
