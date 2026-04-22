@@ -2,9 +2,9 @@ import React from 'react';
 
 const WhyAether = () => {
   const points = [
-    { title: "ADAPTIVE INTELLIGENCE", value: "99%", description: "Real‑time learning adjusts attack vectors for precision." },
-    { title: "SCALABLE AUDITS", value: "10X", description: "High‑throughput execution matches modern CI/CD speeds." },
-    { title: "ACTIONABLE INSIGHTS", value: "ZERO", description: "Deterministic proof‑of‑concepts with clear remediation steps." }
+    { title: "OWASP COVERAGE", value: "FULL", description: "Automated detection of vulnerabilities aligned with the OWASP Top 10 standards." },
+    { title: "SCALABLE SAAS", value: "TENANT", description: "Multi-tenant platform enabling organizations to manage continuous security audits." },
+    { title: "ROOT CAUSE ANALYSIS", value: "DETAILED", description: "Comprehensive reporting with reproducible steps and actionable remediation guidance." }
   ];
 
   return (

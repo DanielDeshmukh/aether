@@ -2,7 +2,6 @@ import React from 'react';
 
 const CapabilityCard = ({ title, description }) => (
   <div className="bg-lambo-charcoal p-8 border-b-2 border-transparent hover:border-lambo-gold transition-all duration-300 flex flex-col justify-between min-h-[300px] relative group overflow-hidden">
-    {/* Subtle hover glow */}
     <div className="absolute inset-0 bg-lambo-gold opacity-0 group-hover:opacity-[0.03] transition-opacity duration-300"></div>
     <div className="relative z-10">
       <div className="w-6 h-[1px] bg-lambo-gold mb-6"></div>
@@ -18,20 +17,20 @@ const CapabilityCard = ({ title, description }) => (
 const Capabilities = () => {
   const features = [
     {
-      title: "AGENTIC REASONING",
-      description: "Moving beyond static payloads. AETHER observes application behavior and formulates hypotheses to discover complex attack surfaces."
-    },
-    {
       title: "THREAT FEED",
-      description: "Real-time visibility into ongoing testing activities. Watch as the agent identifies potential vectors and executes context-aware exploits."
+      description: "Real-time visibility into ongoing testing activities and system interactions. Watch the agent identify vectors in real-time."
     },
     {
-      title: "CUSTOM PAYLOADS",
-      description: "Advanced guidance system for precision targeting. Refine attack strategies with algorithmically generated payloads tailored to specific technologies."
+      title: "PAYLOAD LOGIC",
+      description: "Advanced guidance system for precision targeting. Refine attack strategies with algorithmically generated payloads."
+    },
+    {
+      title: "KILL SWITCH",
+      description: "Safety-first architecture. Immediate termination of testing activity if instability is detected in the target system."
     },
     {
       title: "AUTO-REMEDIATION",
-      description: "Actionable guidance and automated pull requests. Receive detailed root cause analysis and suggested fixes for every vulnerability."
+      description: "Automated fix generation and pull requests. Receive detailed root cause analysis and actionable remediation guidance."
     }
   ];
 

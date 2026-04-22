@@ -3,7 +3,6 @@ import React from 'react';
 const Vision = () => {
   return (
     <section id="vision" className="relative py-48 bg-lambo-black flex items-center justify-center text-center px-10 overflow-hidden">
-      {/* Cinematic Depth Elements */}
       <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-lambo-charcoal to-transparent"></div>
       <div className="absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-lambo-charcoal to-transparent"></div>
       
@@ -15,11 +14,11 @@ const Vision = () => {
         </div>
         
         <h2 className="text-[clamp(2.5rem,8vw,6rem)] mb-12 uppercase text-lambo-white leading-[0.9] tracking-tighter">
-          THE FUTURE IS <br /> <span className="text-lambo-white/40">NO LONGER</span> <br /> <span className="text-lambo-gold">STATIC.</span>
+          THE FUTURE IS <br /> <span className="text-lambo-white/40">INTELLIGENT &</span> <br /> <span className="text-lambo-gold">ADAPTIVE.</span>
         </h2>
         
         <p className="text-xl md:text-2xl text-lambo-ash uppercase tracking-[0.2em] leading-relaxed mb-16 font-light">
-          We are moving beyond conventional scanning. AETHER represents a paradigm shift toward intelligent, adaptive penetration testing that <span className="text-lambo-white">thinks like a human</span> and <span className="text-lambo-white">scales like a machine</span>.
+          AETHER represents an advanced approach to security testing. We simulate the <span className="text-lambo-white">reasoning process</span> of a human expert while maintaining the <span className="text-lambo-white">scalability</span> of modern SaaS systems.
         </p>
         
         <div className="flex justify-center gap-2 items-center">

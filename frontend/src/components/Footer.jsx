@@ -3,7 +3,6 @@ import React from 'react';
 const Footer = () => {
   return (
     <footer className="py-24 bg-lambo-black border-t border-lambo-charcoal/30 px-10 relative overflow-hidden">
-      {/* Subtle Bottom Glow */}
       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full h-[1px] bg-gradient-to-r from-transparent via-lambo-gold/20 to-transparent"></div>
       
       <div className="max-w-[1200px] mx-auto relative z-10">
