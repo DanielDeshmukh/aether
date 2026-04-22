@@ -1,4 +1,5 @@
 import React from 'react';
+import logo from '/images/logo.png';
 
 const Footer = () => {
   return (
@@ -9,7 +10,9 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-16 mb-20">
           <div className="md:col-span-2">
             <div className="flex items-center gap-3 mb-8">
-              <div className="w-5 h-5 bg-lambo-gold" style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }}></div>
+              <div className="w-10 h-9 bg-lambo-black">
+                <img src={logo} alt="AETHER" />
+              </div>
               <span className="text-2xl font-bold tracking-[0.3em] text-lambo-white uppercase">AETHER</span>
             </div>
             <p className="text-[10px] text-lambo-ash tracking-[0.25em] uppercase leading-relaxed max-w-sm">
