@@ -1,10 +1,37 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { FcGoogle } from 'react-icons/fc';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 
 const JoinUs = () => {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
+  const homeRedirectUrl = `${window.location.origin}/home`;
+
+  useEffect(() => {
+    const syncSession = async () => {
+      const { data, error } = await supabase.auth.getSession();
+
+      if (!error && data.session) {
+        navigate('/home', { replace: true });
+      }
+    };
+
+    syncSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        navigate('/home', { replace: true });
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [navigate]);
 
   const handleMagicLinkSignIn = async (e) => {
     e.preventDefault();
@@ -12,7 +39,7 @@ const JoinUs = () => {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: 'http://localhost:5173/home',
+        emailRedirectTo: homeRedirectUrl,
       },
     });
     if (error) console.error('Error sending magic link:', error);
@@ -23,6 +50,13 @@ const JoinUs = () => {
   const handleGoogleSignIn = async () => {
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
+    options: {
+      redirectTo: homeRedirectUrl,
+      queryParams: {
+        access_type: 'offline',
+        prompt: 'consent',
+      },
+    },
   });
 
   if (error) console.error('Error signing in with Google:', error);
