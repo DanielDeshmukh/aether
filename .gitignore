@@ -1,0 +1,12 @@
+# Local secrets
+.env
+.env.local
+.env.*
+!**/.env.example
+
+# Dependencies & Build
+node_modules/
+venv/
+__pycache__/
+dist/
+*.log

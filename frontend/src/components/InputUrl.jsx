@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { buildApiUrl } from '../lib/api';
 
-const InputUrl = ({ onTerminalStart }) => {
+const InputUrl = ({ onTerminalStart, className = '', consentConfirmed = false, onConsentChange }) => {
     const [url, setUrl] = useState('');
-    const [hasAuthority, setHasAuthority] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
@@ -11,7 +11,7 @@ const InputUrl = ({ onTerminalStart }) => {
 
     const handleInitialSubmit = (e) => {
         e.preventDefault();
-        if (url) {
+        if (url && consentConfirmed) {
             setError('');
             setStep('confirm');
         }
@@ -26,10 +26,18 @@ const InputUrl = ({ onTerminalStart }) => {
             const {
                 data: { user },
             } = await supabase.auth.getUser();
-            const response = await fetch(
-                `http://localhost:8000/api/v1/scans?target_url=${encodeURIComponent(url)}${user?.id ? `&user_id=${encodeURIComponent(user.id)}` : ''}`,
-                { method: 'POST' }
-            );
+
+            const response = await fetch(buildApiUrl('/api/v1/scans'), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    target_url: url,
+                    user_id: user?.id ?? null,
+                    consent_confirmed: consentConfirmed,
+                }),
+            });
             const payload = await response.json();
 
             if (!response.ok) {
@@ -42,7 +50,7 @@ const InputUrl = ({ onTerminalStart }) => {
                 setTimeout(() => onTerminalStart(payload), 800);
             }
         } catch (submitError) {
-            setError(submitError.message.toUpperCase());
+            setError((submitError.message || 'ENGINE HANDSHAKE FAILED.').toUpperCase());
             setStep('confirm');
         } finally {
             setIsProcessing(false);
@@ -52,21 +60,20 @@ const InputUrl = ({ onTerminalStart }) => {
 
     const resetState = () => {
         setStep('input');
-        setHasAuthority(false);
         setIsProcessing(false);
         setIsSubmitting(false);
         setError('');
     };
 
     return (
-        <div className="max-w-2xl mx-auto mt-12 font-mono">
+        <div className={`w-full font-mono ${className}`.trim()}>
             {step === 'input' && (
-                <div className="bg-[#0c0c0d] border border-lambo-charcoal/30 p-8 relative overflow-hidden group transition-colors duration-300 hover:border-lambo-gold/20">
-                    <div className="absolute top-0 left-0 w-[2px] h-full bg-lambo-gold opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <div className="group relative overflow-hidden border border-white/10 bg-[#0c0c0d] p-8 transition-colors duration-300 hover:border-lambo-gold/30">
+                    <div className="absolute left-0 top-0 h-full w-[2px] bg-lambo-gold opacity-0 transition-opacity group-hover:opacity-100"></div>
 
-                    <div className="flex items-center gap-3 mb-6">
-                        <div className="w-2 h-2 bg-lambo-gold animate-pulse"></div>
-                        <h2 className="text-lambo-gold text-[10px] font-black tracking-[0.4em] uppercase">
+                    <div className="mb-6 flex items-center gap-3">
+                        <div className="h-2 w-2 animate-pulse bg-lambo-gold"></div>
+                        <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-lambo-gold">
                             Target Acquisition
                         </h2>
                     </div>
@@ -79,16 +86,39 @@ const InputUrl = ({ onTerminalStart }) => {
                                 value={url}
                                 onChange={(e) => setUrl(e.target.value)}
                                 placeholder="HTTPS://TARGET-SYSTEM.IO"
-                                className="w-full bg-neutral-900/50 border border-lambo-charcoal/50 text-lambo-white py-5 px-6 outline-none focus:border-lambo-gold/50 transition-colors placeholder:text-lambo-ash/20 tracking-widest text-sm"
+                                className="w-full border border-white/10 bg-neutral-900/50 px-6 py-5 text-sm tracking-widest text-lambo-white outline-none transition-colors placeholder:text-lambo-ash/20 focus:border-lambo-gold/50"
                             />
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[9px] text-lambo-gold/20 tracking-tighter">
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[9px] tracking-tighter text-lambo-gold/20">
                                 [AWAITING_COORDINATES]
                             </div>
                         </div>
 
+                        <label className="group flex cursor-pointer items-start gap-4">
+                            <div className="relative mt-1">
+                                <input
+                                    type="checkbox"
+                                    checked={consentConfirmed}
+                                    onChange={(event) => onConsentChange?.(event.target.checked)}
+                                    className="peer sr-only"
+                                />
+                                <div className="h-5 w-5 border border-white/10 transition-colors duration-300 peer-checked:bg-lambo-gold"></div>
+                                <div className="absolute inset-0 flex items-center justify-center text-[9px] font-black text-black opacity-0 peer-checked:opacity-100">
+                                    OK
+                                </div>
+                            </div>
+                            <span className="text-[10px] uppercase leading-tight tracking-[0.18em] text-lambo-white/80 transition-opacity group-hover:text-lambo-white">
+                                I certify that I own this target or have explicit written authorization to perform security testing.
+                            </span>
+                        </label>
+
                         <button
                             type="submit"
-                            className="w-full bg-lambo-gold hover:bg-[#917300] text-black font-black py-4 uppercase tracking-[0.2em] transition-colors text-xs"
+                            disabled={!consentConfirmed}
+                            className={`w-full py-4 text-xs font-black uppercase tracking-[0.2em] transition-[background-color,box-shadow] duration-300 ${
+                                consentConfirmed
+                                    ? 'bg-lambo-gold text-black hover:bg-[#917300] hover:shadow-[0_0_15px_rgba(255,191,0,0.4)]'
+                                    : 'cursor-not-allowed bg-lambo-gold/20 text-black/40'
+                            }`}
                         >
                             Initialize Neural Scan
                         </button>
@@ -97,86 +127,71 @@ const InputUrl = ({ onTerminalStart }) => {
             )}
 
             {step === 'confirm' && (
-                <div className="bg-[#0c0c0d] border border-lambo-gold/30 p-8 relative animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="text-center mb-8">
-                        <div className="inline-block px-3 py-1 bg-red-600/10 border border-red-600/20 text-red-500 text-[9px] font-black tracking-widest uppercase mb-4">
+                <div className="relative border border-white/10 bg-[#0c0c0d] p-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="mb-8 text-center">
+                        <div className="mb-4 inline-block border border-white/10 bg-red-600/10 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-red-500">
                             Legal Protocol Required
                         </div>
-                        <h2 className="text-lambo-white text-xl uppercase tracking-tighter">Authority Verification</h2>
+                        <h2 className="text-xl uppercase tracking-tighter text-lambo-white">Authority Verification</h2>
                     </div>
 
-                    <div className="bg-neutral-950/80 border border-lambo-charcoal/30 p-5 mb-8">
-                        <p className="text-[11px] text-lambo-ash leading-relaxed uppercase tracking-wider">
-                            By proceeding, you explicitly declare full administrative authority over <span className="text-lambo-gold underline underline-offset-4">{url}</span>.
-                            Aether&apos;s orchestration loops operate under the assumption of legal ownership.
-                            Unauthorized testing is strictly prohibited by our <span className="text-lambo-gold underline cursor-pointer">Privacy Framework</span>.
+                    <div className="mb-8 border border-white/10 bg-neutral-950/80 p-5">
+                        <p className="text-[11px] uppercase tracking-wider text-lambo-ash">
+                            By proceeding, AETHER will write a consent log before the hunt starts for <span className="text-lambo-gold underline underline-offset-4">{url}</span>.
+                            The target, authenticated user identity when available, and source IP will be persisted as part of the legal shield.
                         </p>
                     </div>
 
                     {error && (
-                        <div className="mb-6 border border-red-600/30 bg-red-600/10 px-4 py-3 text-[10px] text-red-500 uppercase tracking-[0.18em]">
+                        <div className="mb-6 border border-white/10 bg-red-600/10 px-4 py-3 text-[10px] uppercase tracking-[0.18em] text-red-500">
                             {error}
                         </div>
                     )}
 
-                    <label className="flex items-start gap-4 cursor-pointer group mb-8">
-                        <div className="relative mt-1">
-                            <input
-                                type="checkbox"
-                                checked={hasAuthority}
-                                onChange={() => setHasAuthority(!hasAuthority)}
-                                className="peer sr-only"
-                            />
-                            <div className="w-5 h-5 border border-lambo-gold/30 peer-checked:bg-lambo-gold transition-colors duration-300"></div>
-                            <div className="absolute inset-0 flex items-center justify-center opacity-0 peer-checked:opacity-100 text-black text-[10px] font-bold">
-                                ✓
-                            </div>
-                        </div>
-                        <span className="text-[10px] text-lambo-white uppercase tracking-widest leading-tight select-none opacity-70 group-hover:opacity-100 transition-opacity">
-                            I confirm legal jurisdiction and administrative ownership of this domain.
-                        </span>
-                    </label>
+                    <div className="mb-8 border border-white/10 bg-white/[0.02] px-4 py-4 text-[10px] uppercase tracking-[0.18em] text-lambo-white">
+                        Consent Status: <span className="text-lambo-gold">{consentConfirmed ? 'ARMED FOR LOGGING' : 'MISSING'}</span>
+                    </div>
 
                     <div className="flex gap-4">
                         <button
                             onClick={resetState}
-                            className="flex-1 border border-lambo-charcoal/50 text-lambo-ash py-4 uppercase tracking-widest text-[10px] hover:bg-white/5 transition-colors"
+                            className="flex-1 border border-white/10 py-4 text-[10px] uppercase tracking-widest text-lambo-ash transition-colors hover:bg-white/5"
                         >
                             Abort
                         </button>
                         <button
-                            disabled={!hasAuthority || isProcessing || isSubmitting}
+                            disabled={!consentConfirmed || isProcessing || isSubmitting}
                             onClick={handleFinalExecution}
-                            className={`flex-1 py-4 uppercase tracking-widest text-[10px] font-black transition-colors ${
-                                hasAuthority
+                            className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest transition-colors ${
+                                consentConfirmed
                                     ? 'bg-lambo-gold text-black hover:bg-[#917300]'
-                                    : 'bg-lambo-gold/20 text-black/40 cursor-not-allowed'
+                                    : 'cursor-not-allowed bg-lambo-gold/20 text-black/40'
                             }`}
                         >
-                            {isProcessing ? 'Verifying Protocol...' : 'Authorize & Execute'}
+                            {isProcessing ? 'Logging Consent...' : 'Authorize & Execute Hunt'}
                         </button>
                     </div>
                 </div>
             )}
 
             {step === 'success' && (
-                <div className="bg-lambo-gold p-[1px] animate-in fade-in zoom-in duration-700">
+                <div className="animate-in zoom-in duration-700 bg-lambo-gold p-[1px] fade-in">
                     <div className="bg-neutral-950 p-10 text-center">
-                        <div className="w-16 h-16 bg-lambo-gold/10 border border-lambo-gold flex items-center justify-center mx-auto mb-6">
-                            <span className="text-lambo-gold text-2xl">✓</span>
+                        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center border border-white/10 bg-lambo-gold/10">
+                            <span className="text-xs font-black uppercase tracking-[0.3em] text-lambo-gold">Armed</span>
                         </div>
-                        <h2 className="text-lambo-white text-2xl uppercase tracking-tighter mb-2">Protocol Established</h2>
-                        <p className="text-lambo-ash text-[10px] uppercase tracking-[0.2em] max-w-xs mx-auto leading-loose">
-                            Target <span className="text-lambo-gold">{url}</span> successfully integrated into Aether Neural Hub.
+                        <h2 className="mb-2 text-2xl uppercase tracking-tighter text-lambo-white">Protocol Established</h2>
+                        <p className="mx-auto max-w-xs text-[10px] uppercase leading-loose tracking-[0.2em] text-lambo-ash">
+                            Target <span className="text-lambo-gold">{url}</span> successfully integrated into the AETHER hunt pipeline.
                         </p>
 
-                        <div className="mt-8 pt-8 border-t border-lambo-charcoal/30 flex flex-col gap-4">
-                            <div className="text-[9px] text-lambo-gold/40 uppercase tracking-[0.3em] animate-pulse">
-                                Handing over to logic engine...
+                        <div className="mt-8 flex flex-col gap-4 border-t border-white/10 pt-8">
+                            <div className="animate-pulse text-[9px] uppercase tracking-[0.3em] text-lambo-gold/40">
+                                Handing over to vulnerability hunter...
                             </div>
                             <button
                                 onClick={resetState}
-                                className="text-lambo-ash text-[9px] uppercase tracking-widest hover:text-lambo-gold transition-colors"
+                                className="text-[9px] uppercase tracking-widest text-lambo-ash transition-colors hover:text-lambo-gold"
                             >
                                 [ Initialize Alternative Perimeter ]
                             </button>

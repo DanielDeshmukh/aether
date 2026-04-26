@@ -1,0 +1,12 @@
+{
+  "name": "aether",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "predev": "node scripts/check-env.mjs",
+    "dev": "concurrently --kill-others-on-fail --names BACKEND,FRONTEND --prefix \"[{name}]\" --prefix-colors \"blue.bold,magenta.bold\" \"python -m uvicorn --app-dir backend app.api.main:app\" \"npm --prefix frontend run dev\""
+  },
+  "dependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

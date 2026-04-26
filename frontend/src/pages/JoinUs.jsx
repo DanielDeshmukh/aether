@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { FcGoogle } from 'react-icons/fc';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 const JoinUs = () => {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const homeRedirectUrl = `${window.location.origin}/home`;
+  useDocumentTitle('Authentication');
 
   useEffect(() => {
     const syncSession = async () => {

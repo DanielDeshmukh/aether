@@ -3,10 +3,15 @@ import json
 import os
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import AsyncIterator, Dict, List, Literal
+from typing import Any, AsyncIterator, Dict, List, Literal
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field, ValidationError
+
+from app.tools.audit_engine import audit_engine, format_audit_logs
+from app.tools.headers import format_header_logs, header_audit
+from app.tools.remediation import find_vulnerability, generate_remediation
+from app.tools.scanner import format_port_logs, port_scan
 
 try:
     from google import genai
@@ -23,11 +28,25 @@ class InitialPlan(BaseModel):
     steps: List[PlanStep] = Field(min_length=3, max_length=3)
 
 
+class FinalVerdict(BaseModel):
+    threat_level: Literal["low", "medium", "high", "critical"]
+    risk_impact: str = Field(min_length=20, max_length=420)
+    remediation_steps: List[str] = Field(min_length=2, max_length=4)
+
+
 class BrainStatus(str, Enum):
     RUNNING = "running"
     PAUSED = "paused"
     TERMINATED = "terminated"
     COMPLETE = "complete"
+    FAILED = "failed"
+
+
+class BrainBoundaryError(Exception):
+    def __init__(self, message: str, *, phase: str = "analyze") -> None:
+        super().__init__(message)
+        self.message = message
+        self.phase = phase
 
 
 @dataclass
@@ -40,6 +59,7 @@ class BrainState:
     requires_operator: bool = False
     resume_token: str = "PLAN_ACK"
     resume_reason: str | None = None
+    error_message: str | None = None
     notes: List[str] = field(default_factory=list)
     pause_event: asyncio.Event = field(default_factory=asyncio.Event)
 
@@ -55,6 +75,7 @@ class BrainState:
             "current_step": self.current_step,
             "requires_operator": self.requires_operator,
             "resume_reason": self.resume_reason,
+            "error_message": self.error_message,
         }
 
 
@@ -62,6 +83,7 @@ class PentestAgent:
     def __init__(self) -> None:
         self.api_key = os.getenv("GEMINI_API_KEY", "").strip()
         self.model_name = "gemini-2.5-flash"
+        self.request_timeout_seconds = 20
 
     def _has_usable_api_key(self) -> bool:
         return bool(self.api_key) and not self.api_key.lower().startswith("your_")
@@ -79,14 +101,14 @@ class PentestAgent:
                 ),
                 PlanStep(
                     label="PLAN",
-                    message="Stage three minimal checks around access control, session handling, and hostile input validation before active execution.",
+                    message="Stage a multi-phase hunt across access control, hostile input reflection, and abuse-resilience signals before active execution.",
                 ),
             ]
         )
 
     def _build_prompt(self, target_url: str, hostname: str) -> str:
         return f"""
-You are AETHER, a senior penetration testing strategist for an agentic SaaS security platform.
+You are AETHER, a senior vulnerability hunter for an agentic SaaS security platform.
 Target URL: {target_url}
 Host: {hostname}
 
@@ -106,7 +128,7 @@ Rules:
 - Mention headers, sessions, routes, access control, or entry points when relevant.
 - Do not mention the user, the prompt, the schema, JSON, or that you are generating a response.
 - Do not explain your instructions or describe yourself.
-- Treat the target as a real web asset and reason about passive HTTP and application-layer reconnaissance.
+- Treat the target as a real web asset and reason about a staged hunt across passive HTTP, application-layer reconnaissance, and safe heuristic validation.
 - Output raw JSON only.
 """.strip()
 
@@ -127,8 +149,47 @@ Rules:
                 },
             )
             return self._validate_response(response.text, hostname, target_url)
-        except Exception:
-            return self._fallback_plan(hostname, target_url)
+        except Exception as error:
+            raise BrainBoundaryError(
+                "Gemini planning failed before the scan could start. Check the model configuration and retry."
+            ) from error
+
+    def _fallback_verdict(self, results: Dict[str, Any]) -> FinalVerdict:
+        port_scan_result = results.get("port_scan") or {}
+        header_result = results.get("header_audit") or {}
+        audit_result = results.get("audit_engine") or {}
+        open_ports = port_scan_result.get("open_ports", [])
+        findings = header_result.get("findings", [])
+        hunt_findings = audit_result.get("findings", [])
+
+        threat_level = "low"
+        if findings or hunt_findings or len(open_ports) >= 3:
+            threat_level = "medium"
+        if len(findings) + len(hunt_findings) >= 3 or any(port in open_ports for port in (8080, 3000, 5000)):
+            threat_level = "high"
+        if len(findings) + len(hunt_findings) >= 5:
+            threat_level = "critical"
+
+        risk_impact = (
+            f"The exposed ports {open_ports or ['none']} and header findings "
+            f"({len(findings) + len(hunt_findings)} total hunt signals) indicate a {threat_level.upper()} probability of avoidable web-surface exposure."
+        )
+        remediation_steps = [
+            "Restrict public-facing ports to required production services and place non-essential listeners behind access controls.",
+            "Add missing browser security headers including HSTS, CSP, X-Frame-Options, and X-Content-Type-Options.",
+            "Review input-handling and abuse-control paths for reflected parameter handling, throttling, and unnecessary infrastructure disclosures.",
+            "Review upstream proxy and application defaults to align deployment hardening with the observed attack surface.",
+        ]
+        if threat_level in {"high", "critical"}:
+            remediation_steps.append(
+                "Prioritize a targeted validation pass on the exposed alternate ports before the next production release window."
+            )
+
+        return FinalVerdict(
+            threat_level=threat_level,
+            risk_impact=risk_impact,
+            remediation_steps=remediation_steps[:4],
+        )
 
     def _validate_response(self, raw_text: str, hostname: str, target_url: str) -> InitialPlan:
         cleaned = raw_text.strip()
@@ -162,6 +223,50 @@ Rules:
 
         return plan
 
+    def generate_final_verdict(self, target_url: str, results: Dict[str, Any]) -> FinalVerdict:
+        if genai is None or not self._has_usable_api_key():
+            return self._fallback_verdict(results)
+
+        prompt = f"""
+You are a Lead Security Consultant writing the closing security posture summary for a tactical vulnerability hunt.
+Target URL: {target_url}
+Tool Results JSON:
+{json.dumps(results)}
+
+Return raw JSON only in this exact shape:
+{{
+  "threat_level": "low|medium|high|critical",
+  "risk_impact": "...",
+  "remediation_steps": ["...", "..."]
+}}
+
+Rules:
+- Summarize the business and technical impact of the discovered exposure.
+- Remediation steps must be concrete, prioritized, and implementation-focused.
+- Do not mention prompts, JSON, schema, or yourself.
+- Keep risk_impact concise and executive-ready.
+""".strip()
+
+        try:
+            client = genai.Client(api_key=self.api_key)
+            response = client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config={
+                    "response_mime_type": "application/json",
+                    "response_json_schema": FinalVerdict.model_json_schema(),
+                },
+            )
+            cleaned = response.text.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.strip("`")
+                cleaned = cleaned.removeprefix("json").strip()
+            return FinalVerdict.model_validate_json(cleaned)
+        except Exception as error:
+            raise BrainBoundaryError(
+                "Gemini analysis timed out while building the final verdict. The scan was stopped before persistence drifted."
+            ) from error
+
 
 class BrainOrchestrator:
     def __init__(self, scan_id: str, target_url: str):
@@ -170,10 +275,22 @@ class BrainOrchestrator:
         self.plan_hold_triggered = False
         self.agent = PentestAgent()
         self.initial_plan: InitialPlan | None = None
+        self.execution_results: Dict[str, Any] = {"port_scan": None, "header_audit": None, "audit_engine": None}
+        self.final_report: Dict[str, Any] | None = None
+        self.remediations: Dict[str, Any] = {}
 
     async def ensure_initial_plan(self) -> InitialPlan:
         if self.initial_plan is None:
-            self.initial_plan = await asyncio.to_thread(self.agent.generate_initial_plan, self.state.target_url)
+            try:
+                self.initial_plan = await asyncio.wait_for(
+                    asyncio.to_thread(self.agent.generate_initial_plan, self.state.target_url),
+                    timeout=self.agent.request_timeout_seconds,
+                )
+            except asyncio.TimeoutError as error:
+                raise BrainBoundaryError(
+                    "Gemini planning timed out while preparing the strategy trace. Please retry the scan.",
+                    phase="observe",
+                ) from error
         return self.initial_plan
 
     async def build_steps(self) -> List[dict]:
@@ -197,34 +314,139 @@ class BrainOrchestrator:
             {
                 "type": "plan",
                 "phase": "plan",
-                "msg": "PLAN: HYPOTHESIS MATRIX READY. OPERATOR REVIEW WINDOW OPEN.",
+                "msg": "PLAN: HUNT MATRIX READY. OPERATOR REVIEW WINDOW OPEN.",
             },
             {
                 "type": "plan",
                 "phase": "plan",
-                "msg": "PLAN: PRIMARY CHECKS TARGET ACCESS CONTROL, SESSION FLOW, AND INPUT SURFACES.",
+                "msg": "PLAN: PRIMARY HUNT TARGETS ACCESS CONTROL, INPUT REFLECTION, AND RESILIENCE GAPS.",
             },
             {
-                "type": "observe",
+                "type": "execute",
                 "phase": "execute",
-                "msg": "OBSERVE: CONTROLLED BROWSER STAGED. FIRST ACTIVE REQUEST WILL FOLLOW APPROVED PLAN SIGNALS.",
+                "msg": "EXECUTE: CONTROLLED HUNT TOOLING STAGED. ACTIVE RECON WILL FOLLOW APPROVED PLAN SIGNALS.",
             },
             {
-                "type": "observe",
+                "type": "execute",
                 "phase": "execute",
-                "msg": "OBSERVE: TELEMETRY STREAM ACTIVE. PAYLOAD WINDOW REMAINS CONSTRAINED AND AUDITABLE.",
+                "msg": "EXECUTE: TELEMETRY STREAM ACTIVE. PORT, HEADER, AND HUNT CHECKS REMAIN CONSTRAINED AND AUDITABLE.",
             },
             {
                 "type": "plan",
                 "phase": "analyze",
-                "msg": "PLAN: CORRELATING RESPONSES FOR ROOT-CAUSE SIGNALS AND FALSE-POSITIVE FILTERING.",
+                "msg": "PLAN: CORRELATING HUNT SIGNALS FOR ROOT-CAUSE ANALYSIS AND FALSE-POSITIVE FILTERING.",
             },
             {
                 "type": "observe",
                 "phase": "analyze",
-                "msg": "OBSERVE: INITIAL SURFACE MAP COMPLETE. READY FOR NEXT REASONING PASS.",
+                "msg": "OBSERVE: INITIAL HUNT SURFACE MAP COMPLETE. READY FOR NEXT REASONING PASS.",
             },
         ]
+
+    async def run_execute_phase(self) -> AsyncIterator[dict]:
+        self.state.phase = "execute"
+        try:
+            port_result = await asyncio.wait_for(port_scan(self.state.target_url), timeout=12)
+        except asyncio.TimeoutError as error:
+            raise BrainBoundaryError(
+                "Port scan timed out before AETHER could map the exposed surface.",
+                phase="execute",
+            ) from error
+        except Exception as error:
+            raise BrainBoundaryError(
+                "Port scan failed before execution telemetry could complete.",
+                phase="execute",
+            ) from error
+
+        if port_result.get("error"):
+            raise BrainBoundaryError(str(port_result["error"]), phase="execute")
+        self.execution_results["port_scan"] = port_result
+
+        for message in format_port_logs(port_result):
+            yield {
+                "type": "execute",
+                "phase": "execute",
+                "msg": message,
+                "brain": self.state.snapshot(),
+                "results": self.serialize_results(),
+            }
+
+        try:
+            header_result = await asyncio.wait_for(header_audit(self.state.target_url), timeout=12)
+        except asyncio.TimeoutError as error:
+            raise BrainBoundaryError(
+                "Header audit timed out before response hardening could be evaluated.",
+                phase="execute",
+            ) from error
+        except Exception as error:
+            raise BrainBoundaryError(
+                "Header audit failed before HTTP security posture could be evaluated.",
+                phase="execute",
+            ) from error
+
+        if header_result.get("error"):
+            raise BrainBoundaryError(str(header_result["error"]), phase="execute")
+        self.execution_results["header_audit"] = header_result
+
+        for message in format_header_logs(header_result):
+            yield {
+                "type": "execute",
+                "phase": "execute",
+                "msg": message,
+                "brain": self.state.snapshot(),
+                "results": self.serialize_results(),
+            }
+
+        try:
+            audit_result = await asyncio.wait_for(audit_engine(self.state.target_url), timeout=14)
+        except asyncio.TimeoutError as error:
+            raise BrainBoundaryError(
+                "Audit engine timed out before vulnerability profiling could complete.",
+                phase="execute",
+            ) from error
+        except Exception as error:
+            raise BrainBoundaryError(
+                "Audit engine failed before vulnerability profiling could complete.",
+                phase="execute",
+            ) from error
+
+        if audit_result.get("error"):
+            raise BrainBoundaryError(str(audit_result["error"]), phase="execute")
+        self.execution_results["audit_engine"] = audit_result
+
+        for message in format_audit_logs(audit_result):
+            yield {
+                "type": "execute",
+                "phase": "execute",
+                "msg": message,
+                "brain": self.state.snapshot(),
+                "results": self.serialize_results(),
+            }
+
+        try:
+            verdict = await asyncio.wait_for(
+                asyncio.to_thread(
+                    self.agent.generate_final_verdict,
+                    self.state.target_url,
+                    self.serialize_results(),
+                ),
+                timeout=self.agent.request_timeout_seconds,
+            )
+        except asyncio.TimeoutError as error:
+            raise BrainBoundaryError(
+                "Gemini analysis timed out while generating the final verdict.",
+                phase="analyze",
+            ) from error
+        self.final_report = verdict.model_dump()
+        self.state.phase = "analyze"
+        yield {
+            "type": "analyze",
+            "phase": "analyze",
+            "msg": f"ANALYZE: FINAL VERDICT LOCKED AT {verdict.threat_level.upper()} RISK. MISSION DEBRIEF READY.",
+            "brain": self.state.snapshot(),
+            "results": self.serialize_results(),
+            "final_report": self.serialize_final_report(),
+        }
 
     async def stream(self) -> AsyncIterator[dict]:
         steps = await self.build_steps()
@@ -261,6 +483,8 @@ class BrainOrchestrator:
                     "msg": f"PLAN: OPERATOR CLEARANCE ACCEPTED. RESUMING WITH TOKEN {self.state.resume_token}.",
                     "brain": self.state.snapshot(),
                 }
+                async for execute_log in self.run_execute_phase():
+                    yield execute_log
                 await asyncio.sleep(0.5)
                 continue
 
@@ -272,14 +496,61 @@ class BrainOrchestrator:
         yield {
             "type": "plan",
             "phase": "analyze",
-            "msg": "PLAN: REASONING LOOP COMPLETE. ENGINE READY FOR TARGETED VALIDATION.",
+            "msg": "PLAN: HUNT LOOP COMPLETE. ENGINE READY FOR TARGETED VALIDATION.",
             "brain": self.state.snapshot(),
         }
 
-    def serialize_initial_plan(self) -> List[dict]:
+    def serialize_initial_plan(self) -> Dict[str, List[dict]]:
         if self.initial_plan is None:
-            return []
-        return [step.model_dump() for step in self.initial_plan.steps]
+            return {"steps": []}
+        return self.initial_plan.model_dump()
+
+    def serialize_results(self) -> Dict[str, Any]:
+        return {
+            "port_scan": self.execution_results.get("port_scan"),
+            "header_audit": self.execution_results.get("header_audit"),
+            "audit_engine": self.execution_results.get("audit_engine"),
+        }
+
+    def serialize_final_report(self) -> Dict[str, Any]:
+        return self.final_report or {}
+
+    def serialize_remediations(self) -> Dict[str, Any]:
+        return self.remediations
+
+    async def generate_fix(self, vuln_id: str) -> Dict[str, Any]:
+        vulnerability = find_vulnerability(self.serialize_results(), vuln_id)
+        if vulnerability is None:
+            return {
+                "vuln_id": vuln_id,
+                "title": "Remediation Unavailable",
+                "language": "text",
+                "code": "No matching vulnerability was found in the persisted scan results.",
+                "summary": "Re-run the scan or choose a finding from the current header audit results.",
+            }
+
+        try:
+            remediation = await asyncio.wait_for(
+                asyncio.to_thread(
+                    generate_remediation,
+                    self.state.target_url,
+                    vulnerability,
+                    self.serialize_results(),
+                ),
+                timeout=self.agent.request_timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            remediation = {
+                "vuln_id": vuln_id,
+                "title": "Remediation Timeout",
+                "language": "text",
+                "code": "Remediation generation timed out. Retry to request a fresh patch suggestion.",
+                "summary": "The AI remediation request took too long to complete, so no code sample was persisted.",
+                "error": "Gemini remediation generation timed out.",
+            }
+        self.remediations[vuln_id] = remediation
+        self.state.phase = "remediate"
+        return remediation
 
     def pause(self, reason: str) -> None:
         self.state.status = BrainStatus.PAUSED
@@ -292,12 +563,31 @@ class BrainOrchestrator:
         self.state.status = BrainStatus.RUNNING
         self.state.requires_operator = False
         self.state.resume_reason = reason or "PLAN ACKNOWLEDGED"
+        self.state.error_message = None
         self.state.notes.append(self.state.resume_reason)
         self.state.pause_event.set()
 
     def terminate(self) -> None:
         self.state.status = BrainStatus.TERMINATED
         self.state.requires_operator = False
+        self.state.pause_event.set()
+
+    def fail(self, reason: str, *, phase: str = "analyze") -> None:
+        self.state.status = BrainStatus.FAILED
+        self.state.phase = phase
+        self.state.requires_operator = False
+        self.state.resume_reason = None
+        self.state.error_message = reason
+        self.state.notes.append(reason)
+        self.final_report = {
+            "threat_level": "critical",
+            "risk_impact": reason,
+            "remediation_steps": [
+                "Review the scan logs for the failing tool or upstream service.",
+                "Restore connectivity or credentials, then rerun the scan.",
+            ],
+            "error_message": reason,
+        }
         self.state.pause_event.set()
 
     def apply_signal(self, signal: str, reason: str | None = None) -> Dict[str, str | int | bool | None]:

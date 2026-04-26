@@ -1,0 +1,14 @@
+#.dockerignore
+
+.git
+.gitignore
+**/__pycache__
+**/.pytest_cache
+**/node_modules
+**/dist
+**/venv
+**/.env
+**/.env.*
+!**/.env.example
+backend/verify_stdout.log
+backend/verify_stderr.log

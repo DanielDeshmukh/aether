@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { buildApiUrl, buildWsUrl } from '../lib/api';
 
 const statusLabels = {
     idle: 'STANDBY',
@@ -7,9 +8,10 @@ const statusLabels = {
     analyzing: 'ANALYZING',
     paused: 'PLAN HOLD',
     terminated: 'HALTED',
+    failed: 'FAILED',
 };
 
-const ScanningConsole = ({ scanSession }) => {
+const ScanningConsole = ({ scanSession, className = '' }) => {
     const [logs, setLogs] = useState([]);
     const [status, setStatus] = useState('idle');
     const [brainState, setBrainState] = useState(null);
@@ -33,7 +35,7 @@ const ScanningConsole = ({ scanSession }) => {
         setBrainState(null);
         setStatus('connecting');
 
-        socketRef.current = new WebSocket(`ws://localhost:8000/ws/scan/${scanSession.scan_id}`);
+        socketRef.current = new WebSocket(buildWsUrl(`/ws/scan/${scanSession.scan_id}`));
 
         socketRef.current.onopen = () => {
             setStatus('scanning');
@@ -54,6 +56,10 @@ const ScanningConsole = ({ scanSession }) => {
                 setStatus('paused');
             }
 
+            if (data.brain?.status === 'failed') {
+                setStatus('failed');
+            }
+
             if (data.msg.includes('TERMINATED')) {
                 setStatus('terminated');
             }
@@ -65,7 +71,9 @@ const ScanningConsole = ({ scanSession }) => {
         };
 
         socketRef.current.onclose = () => {
-            setStatus((currentStatus) => (currentStatus === 'terminated' ? currentStatus : 'analyzing'));
+            setStatus((currentStatus) => (
+                currentStatus === 'terminated' || currentStatus === 'failed' ? currentStatus : 'analyzing'
+            ));
         };
 
         return () => {
@@ -85,7 +93,7 @@ const ScanningConsole = ({ scanSession }) => {
         setStatus('terminated');
 
         try {
-            await fetch(`http://localhost:8000/api/v1/scan/kill/${scanSession.scan_id}`, { method: 'POST' });
+            await fetch(buildApiUrl(`/api/v1/scan/kill/${scanSession.scan_id}`), { method: 'POST' });
         } catch (err) {
             console.error('Failed to send kill signal to engine:', err);
         }
@@ -113,11 +121,11 @@ const ScanningConsole = ({ scanSession }) => {
     };
 
     return (
-        <div className="w-full max-w-4xl mx-auto font-mono animate-in fade-in duration-700">
-            <div className="bg-[#0c0c0d] border border-lambo-charcoal/30 overflow-hidden">
-                <div className="bg-lambo-charcoal/10 border-b border-lambo-charcoal/30 p-4 flex justify-between items-center">
+        <div className={`w-full font-mono animate-in fade-in duration-700 ${className}`.trim()}>
+            <div className="bg-[#0c0c0d] border border-white/10 overflow-hidden">
+                <div className="bg-lambo-charcoal/10 border-b border-white/10 p-4 flex justify-between items-center">
                     <div className="flex items-center gap-3">
-                        <div className={`w-2 h-2 ${status === 'terminated' ? 'bg-red-600' : 'bg-lambo-gold animate-pulse'}`}></div>
+                        <div className={`w-2 h-2 ${status === 'terminated' || status === 'failed' ? 'bg-red-600' : 'bg-lambo-gold animate-pulse'}`}></div>
                         <span className="text-[10px] text-lambo-white uppercase tracking-[0.3em] font-black">
                             AETHER_ENGINE_CORE
                         </span>
@@ -130,7 +138,7 @@ const ScanningConsole = ({ scanSession }) => {
                 </div>
 
                 {brainState?.requires_operator && (
-                    <div className="border-b border-lambo-gold/30 bg-lambo-gold/10 px-4 py-3 flex items-center justify-between gap-4">
+                    <div className="border-b border-white/10 bg-lambo-gold/10 px-4 py-3 flex items-center justify-between gap-4">
                         <div>
                             <p className="text-[9px] text-lambo-gold uppercase tracking-[0.35em]">Plan Hold</p>
                             <p className="text-[10px] text-lambo-white uppercase tracking-[0.18em]">
@@ -170,8 +178,8 @@ const ScanningConsole = ({ scanSession }) => {
                                 </span>
                                 <div className={`flex-1 space-y-1 border px-3 py-3 ${
                                     log.type === 'error'
-                                        ? 'border-red-600/30 bg-red-600/10'
-                                        : 'border-lambo-gold/30 bg-lambo-gold/5'
+                                        ? 'border-white/10 bg-red-600/10'
+                                        : 'border-white/10 bg-lambo-gold/5'
                                 }`}>
                                     <span className={`block tracking-wide uppercase ${
                                         log.type === 'error' ? 'text-red-400' : 'text-lambo-white'
@@ -179,8 +187,8 @@ const ScanningConsole = ({ scanSession }) => {
                                     {log.phase && (
                                         <span className={`inline-block border px-2 py-1 text-[8px] uppercase tracking-[0.28em] ${
                                             log.type === 'error'
-                                                ? 'border-red-600/40 text-red-400'
-                                                : 'border-lambo-gold/50 text-lambo-gold'
+                                                ? 'border-white/10 text-red-400'
+                                                : 'border-white/10 text-lambo-gold'
                                         }`}>
                                             {log.phase}
                                         </span>
@@ -197,7 +205,7 @@ const ScanningConsole = ({ scanSession }) => {
                     )}
                 </div>
 
-                <div className="p-4 bg-lambo-charcoal/5 border-t border-lambo-charcoal/30 flex items-center justify-between">
+                <div className="p-4 bg-lambo-charcoal/5 border-t border-white/10 flex items-center justify-between">
                     <div className="flex flex-col gap-1">
                         <span className="text-[8px] text-lambo-ash uppercase">Process Authority</span>
                         <span className="text-[10px] text-lambo-white font-bold tracking-widest">
@@ -229,9 +237,9 @@ const ScanningConsole = ({ scanSession }) => {
                 {[
                     { label: 'Neural_Depth', val: '88%' },
                     { label: 'Active_Nodes', val: logs.length },
-                    { label: 'Risk_Score', val: status === 'terminated' ? '0' : 'LVL_3' },
+                    { label: 'Risk_Score', val: status === 'terminated' ? '0' : status === 'failed' ? 'ERR' : 'LVL_3' },
                 ].map((stat, i) => (
-                    <div key={i} className="bg-[#0c0c0d] border border-lambo-charcoal/20 p-3 text-center group hover:border-lambo-gold/30 transition-colors">
+                    <div key={i} className="bg-[#0c0c0d] border border-white/10 p-3 text-center group hover:border-lambo-gold/30 transition-colors">
                         <p className="text-[8px] text-lambo-ash uppercase mb-1 tracking-widest">{stat.label}</p>
                         <p className="text-sm text-lambo-white font-bold">{stat.val}</p>
                     </div>

@@ -2,10 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --aether-black: #050505;
+  --aether-panel: #0d0d0d;
+  --aether-panel-2: #111111;
+  --aether-gold: #d4af37;
+  --aether-gold-deep: #8f7422;
+  --aether-ink: #f5f1df;
+  --aether-muted: #8f8a78;
+  --aether-line: rgba(212, 175, 55, 0.18);
+}
+
 @layer base {
   body {
-    background-color: #000000;
+    background-color: var(--aether-black);
     color: #FFFFFF;
     @apply overflow-x-hidden;
+  }
+}
+
+@layer components {
+  .chamfer-panel {
+    clip-path: polygon(18px 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%, 0 18px);
+  }
+
+  .chamfer-button {
+    clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+  }
+
+  .chamfer-badge {
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
   }
 }
