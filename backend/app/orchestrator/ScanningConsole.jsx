@@ -100,7 +100,10 @@ const ScanningConsole = ({ scanSession, className = '' }) => {
         setStatus('terminated');
 
         try {
-            await apiRequest(`/api/v1/scan/kill/${scanSession.scan_id}`, { method: 'POST' });
+            const result = await apiRequest(`/api/v1/scan/kill/${scanSession.scan_id}`, { method: 'POST' });
+            if (!result.success) {
+                throw new Error(result.error || 'Failed to send kill signal');
+            }
         } catch (err) {
             console.error('Failed to send kill signal to engine:', err);
         }

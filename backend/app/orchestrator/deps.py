@@ -2,19 +2,17 @@ import os
 from typing import Annotated
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from supabase import create_client
+from supabase import create_client, Client
 
 security = HTTPBearer()
 
+supabase: Client = create_client(
+    os.getenv("SUPABASE_URL"),
+    os.getenv("SUPABASE_ANON_KEY")
+)
+
 def get_supabase():
-    url = os.getenv("SUPABASE_URL")
-    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-
-    if not url or not key:
-        raise RuntimeError("Supabase env vars not loaded")
-
-    return create_client(url, key)
-
+    return supabase
 
 async def get_current_user(
     creds: Annotated[HTTPAuthorizationCredentials, Depends(security)],
@@ -28,7 +26,7 @@ async def get_current_user(
     )
 
     try:
-        response = supabase.auth.get_user(token)
+        response = supabase.auth.get_user(token) # Use the initialized supabase client
         user = response.user
 
         if not user:

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { buildApiUrl } from '../lib/api';
+import { apiRequest } from '../lib/apiClient';
 
 const InputUrl = ({ onTerminalStart, className = '', consentConfirmed = false, onConsentChange }) => {
     const [url, setUrl] = useState('');
@@ -23,21 +23,14 @@ const InputUrl = ({ onTerminalStart, className = '', consentConfirmed = false, o
         setError('');
 
         try {
-            const {
-                data: { user },
-            } = await supabase.auth.getUser();
-
-            const response = await fetch(buildApiUrl('/api/v1/scans'), {
+            const response = await apiRequest('/api/v1/scans', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
                 body: JSON.stringify({
                     target_url: url,
-                    user_id: user?.id ?? null,
                     consent_confirmed: consentConfirmed,
                 }),
             });
+            
             const payload = await response.json();
 
             if (!response.ok) {
@@ -88,9 +81,7 @@ const InputUrl = ({ onTerminalStart, className = '', consentConfirmed = false, o
                                 placeholder="HTTPS://TARGET-SYSTEM.IO"
                                 className="w-full border border-white/10 bg-neutral-900/50 px-6 py-5 text-sm tracking-widest text-lambo-white outline-none transition-colors placeholder:text-lambo-ash/20 focus:border-lambo-gold/50"
                             />
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[9px] tracking-tighter text-lambo-gold/20">
-                                [AWAITING_COORDINATES]
-                            </div>
+                            
                         </div>
 
                         <label className="group flex cursor-pointer items-start gap-4">

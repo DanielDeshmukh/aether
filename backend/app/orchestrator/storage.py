@@ -210,6 +210,19 @@ class ScanStorage:
                 )
                 cursor.execute(
                     """
+                    create table if not exists public.scan_sessions (
+                        id uuid primary key default gen_random_uuid(),
+                        user_id uuid,
+                        target_url text not null,
+                        status text not null,
+                        threat_level text,
+                        scan_started_at timestamptz not null default timezone('utc', now()),
+                        scan_completed_at timestamptz
+                    );
+                    """
+                )
+                cursor.execute(
+                    """
                     create table if not exists public.consent_logs (
                         id uuid primary key default gen_random_uuid(),
                         user_id uuid,
@@ -275,9 +288,26 @@ class ScanStorage:
                 )
                 cursor.execute(
                     """
+                    alter table public.scan_sessions
+                    add column if not exists id uuid default gen_random_uuid(),
+                    add column if not exists user_id uuid,
+                    add column if not exists target_url text,
+                    add column if not exists status text,
+                    add column if not exists threat_level text,
+                    add column if not exists scan_started_at timestamptz not null default timezone('utc', now()),
+                    add column if not exists scan_completed_at timestamptz;
+                    """
+                )
+                cursor.execute(
+                    """
                     alter table public.vulnerabilities
-                    add column if not exists id text,
+                    add column if not exists id uuid default gen_random_uuid(),
                     add column if not exists scan_id uuid,
+                    add column if not exists session_id uuid,
+                    add column if not exists attack_vector text,
+                    add column if not exists detected_threat text,
+                    add column if not exists provided_solution text,
+                    add column if not exists is_fixed boolean default false,
                     add column if not exists category text,
                     add column if not exists title text,
                     add column if not exists severity text,
@@ -356,6 +386,104 @@ class ScanStorage:
             connection.commit()
             self._schema_cache = None
 
+    def persist_scan_results(
+        self,
+        scan_id: str,
+        user_id: str,
+        target_url: str,
+        brain_status: str,
+        initial_plan: Dict[str, Any],
+        results: Dict[str, Any],
+        final_report: Dict[str, Any],
+        remediations: Dict[str, Any]
+    ) -> bool:
+        """Guaranteed multi-table persistence for final scan results."""
+        assert scan_id is not None
+        assert user_id is not None
+
+        client = self.get_client()
+        if client is None:
+            raise Exception("Database client initialization failed")
+
+        threat_level = (final_report or {}).get("threat_level", "unknown").lower()
+        persisted_status = self.normalize_status(brain_status)
+        resolved_scan_id = self.resolve_record_identifier(scan_id)
+
+        # 1. CREATE SCAN SESSION
+        session = client.table(self.sessions_table).insert({
+            "user_id": user_id,
+            "target_url": target_url,
+            "status": persisted_status,
+            "threat_level": threat_level
+        }).execute()
+
+        if not session.data:
+            raise Exception("Scan session creation failed")
+
+        session_id = session.data[0]["id"]
+        print("SESSION:", session_id)
+
+        # 2. UPSERT SCAN RECORD
+        scan_payload = {
+            "id": resolved_scan_id,
+            "user_id": user_id,
+            "target_url": target_url,
+            "status": persisted_status,
+            "threat_level": threat_level,
+            "initial_plan": initial_plan or {"steps": []},
+            "thought_trace": initial_plan.get("steps", []) if isinstance(initial_plan, dict) else [],
+            "results": results or {},
+            "final_report": final_report or {},
+            "remediations": remediations or {},
+        }
+        if persisted_status == "completed":
+            scan_payload["completed_at"] = datetime.now(timezone.utc).isoformat()
+        
+        scan_res = client.table(self.table_name).upsert(scan_payload, on_conflict="id").execute()
+        if not scan_res.data:
+            raise Exception(f"Scan upsert failed for ID {scan_id}")
+
+        # 3. EXTRACT ALL FINDINGS (Audit + Header)
+        audit_findings = results.get("audit_engine", {}).get("findings", [])
+        header_findings = results.get("header_audit", {}).get("findings", [])
+        all_findings = audit_findings + header_findings
+        print("FINDINGS COUNT:", len(all_findings))
+
+        # 4. INSERT INTO VULNERABILITIES (One row per finding)
+        for f in all_findings:
+            payload = {
+                "session_id": session_id,
+                "scan_id": resolved_scan_id,
+                "attack_vector": f.get("category", "unknown"),
+                "detected_threat": f.get("title", "unknown"),
+                "title": f.get("title", "Untitled"),
+                "detail": f.get("detail", ""),
+                "severity": f.get("severity", "Low").capitalize(),
+                "evidence": f.get("evidence", {}),
+                "provided_solution": "Refer to remediation steps",
+                "category": f.get("category", "general")
+            }
+
+            v_res = client.table(self.vulnerabilities_table).insert(payload).execute()
+            if not v_res.data:
+                raise Exception(f"Failed to insert vulnerability: {payload['title']}")
+
+        # 5. INSERT PROFILES
+        profiles_data = results.get("audit_engine", {}).get("profiles", [])
+        for p in profiles_data:
+            p_res = client.table(self.profiles_table).upsert({
+                "scan_id": resolved_scan_id,
+                "profile_type": p.get("profile_type"),
+                "label": p.get("label"),
+                "summary": p.get("summary"),
+                "details": p.get("details", {})
+            }).execute()
+
+            if not p_res.data:
+                raise Exception("Profile insert failed")
+
+        return True
+
     def upsert_scan(
         self,
         scan_id: str,
@@ -366,38 +494,125 @@ class ScanStorage:
         results: Dict[str, Any] | None = None,
         final_report: Dict[str, Any] | None = None,
         remediations: Dict[str, Any] | None = None,
+        session_id: str | None = None,
     ) -> bool:
+        # 1. Mandatory Response Validation
+        assert scan_id is not None, "scan_id is required"
+        assert user_id is not None, "user_id is required"
+        assert isinstance(results or {}, dict), "results must be a dictionary"
+        assert isinstance(final_report or {}, dict), "final_report must be a dictionary"
+
         client = self.get_client()
         if client is None:
-            return False
+            raise Exception("Database client initialization failed")
 
         if self._scan_exists_for_another_user(scan_id=scan_id, user_id=user_id):
-            self._logger.warning(
-                "Blocked cross-tenant scan upsert for scan_id=%s and user_id=%s",
-                scan_id,
-                user_id,
-            )
-            return False
+            raise Exception(f"Cross-tenant violation: scan {scan_id} does not belong to {user_id}")
 
         persisted_status = self.normalize_status(brain_status)
-        payload = {
+        
+        # 2. FULL SCANS TABLE UPSERT PAYLOAD
+        scan_payload = {
             "id": self.build_record_identifier(scan_id),
             "user_id": user_id,
             "target_url": target_url,
             "status": persisted_status,
             "threat_level": (final_report or {}).get("threat_level", self.default_threat_level(persisted_status)),
             "initial_plan": initial_plan,
-            "thought_trace": initial_plan.get("steps", []),
+            "thought_trace": initial_plan.get("steps", []) if isinstance(initial_plan, dict) else [],
             "results": results or {},
             "final_report": final_report or {},
             "remediations": remediations or {},
         }
         if persisted_status == "completed":
             payload["completed_at"] = datetime.now(timezone.utc).isoformat()
+        else:
+            scan_payload["completed_at"] = None
 
-        response = client.table(self.table_name).upsert(payload, on_conflict="id").execute()
-        data = getattr(response, "data", None)
-        return data is not None
+        print(f"DEBUG: INSERTING SCAN: {scan_payload['id']} for {target_url}")
+
+        # 3. Strict Upsert with RETURN CHECK
+        res = client.table(self.table_name).upsert(scan_payload, on_conflict="id").execute()
+        if not res.data:
+            raise Exception(f"Scan upsert failed - no data returned for ID {scan_id}")
+
+        # 4. Update Scan Session
+        session_payload = {
+            "id": session_id or self.resolve_record_identifier(f"sess_{scan_id}"),
+            "user_id": user_id,
+            "target_url": target_url,
+            "status": persisted_status,
+            "threat_level": scan_payload["threat_level"],
+            "scan_started_at": datetime.now(timezone.utc).isoformat()
+        }
+        if persisted_status == "completed":
+            session_payload["scan_completed_at"] = scan_payload.get("completed_at")
+        
+        s_res = client.table(self.sessions_table).upsert(session_payload, on_conflict="id").execute()
+        if not s_res.data:
+             raise Exception(f"Session upsert failed for {session_payload['id']}")
+
+        return True
+
+    def upsert_vulnerabilities(
+        self, 
+        scan_id: str, 
+        user_id: str, 
+        findings: list[Dict[str, Any]], 
+        session_id: str | None = None
+    ) -> bool:
+        assert scan_id is not None
+        assert isinstance(findings, list)
+
+        client = self.get_client()
+        if client is None:
+             raise Exception("Database client initialization failed")
+
+        resolved_scan_id = self.resolve_record_identifier(scan_id)
+        resolved_session_id = session_id or self.resolve_record_identifier(f"sess_{scan_id}")
+
+        # VULNERABILITIES INSERT LOOP (NO SKIP)
+        for v in findings:
+            payload = {
+                "scan_id": resolved_scan_id,
+                "session_id": resolved_session_id,
+                "attack_vector": v.get("attack_vector", "unknown"),
+                "detected_threat": v.get("detected_threat", v.get("title", "unknown")),
+                "title": v.get("title", "Untitled"),
+                "detail": v.get("detail", ""),
+                "severity": v.get("severity", "Low").capitalize(),
+                "evidence": v.get("evidence", {}),
+                "provided_solution": v.get("provided_solution", ""),
+                "category": v.get("category", "general"),
+                "is_fixed": False
+            }
+
+            print(f"DEBUG: INSERTING VULN: {payload['title']} [{payload['severity']}]")
+
+            res = client.table(self.vulnerabilities_table).upsert(
+                payload, 
+                on_conflict="scan_id,title"
+            ).execute()
+
+            if not res.data:
+                raise Exception(f"Failed inserting vulnerability: {payload['title']}")
+
+        return True
+
+    def merge_profile_details(self, user_id: str, new_details: Dict[str, Any]) -> bool:
+        """Upserts profile data using JSONB merge logic."""
+        client = self.get_client()
+        if client is None: return False
+
+        existing = client.table(self.profiles_table).select("details").eq("user_id", user_id).maybe_single().execute()
+        current_details = getattr(existing, "data", {}).get("details", {}) if existing.data else {}
+        current_details.update(new_details)
+
+        res = client.table(self.profiles_table).upsert({
+            "user_id": user_id,
+            "details": current_details
+        }, on_conflict="user_id").execute()
+        return getattr(res, "data", None) is not None
 
     def log_consent(self, user_id: str, target_url: str, ip_address: str | None) -> bool:
         client = self.get_client()
@@ -427,7 +642,6 @@ class ScanStorage:
 
         resolved_scan_id = self.resolve_record_identifier(scan_id)
 
-        # Verify ownership before deletion
         scan_check = client.table(self.table_name).select("id").eq("id", resolved_scan_id).eq("user_id", user_id).execute()
         if not getattr(scan_check, "data", None):
             return False

@@ -1,11 +1,9 @@
-from dotenv import load_dotenv
-load_dotenv()
-
-from pathlib import Path
-
 import asyncio
 import base64
 import io
+from dotenv import load_dotenv
+
+load_dotenv() # Load environment variables at the very top
 import json
 import logging
 import os
@@ -16,14 +14,10 @@ from pathlib import Path
 from typing import Dict, List
 from urllib.parse import urlparse
 
-logo_path = Path(r"D:\Vs Code\Aether\aether\frontend\public\images\logo.png")
-logo_uri = logo_path.as_uri()
 # Windows-specific fix for Playwright and asyncio subprocess handling
 if sys.platform == "win32":
     import asyncio
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-
-from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -34,14 +28,15 @@ from app.services.storage import ScanStorage
 from app.api.deps import get_current_user
 from app.tools.validators import is_safe_url
 
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
-
 logger = logging.getLogger("aether.api")
 
 
 class ScanCreateRequest(BaseModel):
     target_url: str = Field(min_length=3)
     consent_confirmed: bool = False
+
+# Sanity check for environment variables
+print("SUPABASE URL:", os.getenv("SUPABASE_URL"))
 
 def get_allowed_origins() -> List[str]:
     configured = os.getenv("FRONTEND_URL", "")
@@ -355,7 +350,7 @@ async def render_pdf_report(scan: dict, vulnerabilities: list[dict], profiles: l
 <body>
     <div class="header">
         <div class="logo-wrap">
-            <img src="{logo_uri}" class="logo-img" />
+            {"<img src='data:image/png;base64," + logo_base64 + "' class='logo-img' />" if logo_base64 else ""}
             <span class="brand">AETHER</span>
         </div>
         <div class="report-type">Mission Debrief</div>

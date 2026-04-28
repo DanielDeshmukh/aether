@@ -12,14 +12,11 @@ from supabase import Client, create_client
 
 class ScanStorage:
     def __init__(self) -> None:
-        self.supabase_url = self._get_first_env("SUPABASE_URL", "VITE_SUPABASE_URL")
-        self.supabase_key = self._get_first_env(
-            "SUPABASE_SERVICE_ROLE_KEY",
-            "VITE_SUPABASE_SERVICE_ROLE_KEY",
-            "SUPABASE_KEY",
-            "VITE_SUPABASE_ANON_KEY",
-        )
-        self.database_url = self._normalize_database_url(
+        self.supabase_url = os.getenv("SUPABASE_URL", "").strip()
+        self.supabase_anon_key = os.getenv("SUPABASE_ANON_KEY", "").strip()
+        self.supabase_service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+
+        self.database_url = self._normalize_database_url( # Fix 1: Database connection string
             self._get_first_env("DATABASE_URL", "DB_CONNECTION_STRING")
         )
         self.table_name = "scans"
@@ -46,39 +43,41 @@ class ScanStorage:
         return ""
 
     def _normalize_database_url(self, value: str) -> str:
+        # Fix 1: Remove square brackets from password in database URL
         if not value:
             return ""
 
-        normalized = re.sub(r":\[(.*?)\]@", r":\1@", value)
+        # Remove square brackets from password if present
+        normalized = re.sub(r":\[([^\]]+)\]@", r":\1@", value)
+        
         password = os.getenv("DATABASE_PASSWORD", "").strip()
         if password and ":@" in normalized:
             normalized = normalized.replace(":@", f":{password}@")
         return normalized
 
     def configured(self) -> bool:
-        return (
-            bool(self.supabase_url)
-            and bool(self.supabase_key)
+        return ( # Check for both anon and service role keys for full functionality
+            bool(self.supabase_url) and bool(self.supabase_anon_key) and bool(self.supabase_service_role_key)
             and not self.supabase_url.lower().startswith("your_")
-            and not self.supabase_key.lower().startswith("your_")
+            and not self.supabase_anon_key.lower().startswith("your_")
+            and not self.supabase_service_role_key.lower().startswith("your_")
         )
 
     def masked_supabase_url(self) -> str:
         return self.mask_value(self.supabase_url)
 
     def using_service_role_key(self) -> bool:
-        service_role_key = self._get_first_env("SUPABASE_SERVICE_ROLE_KEY", "VITE_SUPABASE_SERVICE_ROLE_KEY")
-        return bool(service_role_key) and self.supabase_key == service_role_key
+        return bool(self.supabase_service_role_key)
 
     def database_configured(self) -> bool:
         return bool(self.database_url) and not self.database_url.lower().startswith("your_")
 
     def get_client(self) -> Client | None:
-        if not self.configured():
+        if not self.supabase_url or not self.supabase_service_role_key:
             return None
 
         if self._client is None:
-            self._client = create_client(self.supabase_url, self.supabase_key)
+            self._client = create_client(self.supabase_url, self.supabase_service_role_key) # Use service role key
 
         return self._client
 
@@ -93,8 +92,8 @@ class ScanStorage:
             response = requests.get(
                 f"{self.supabase_url}/rest/v1/",
                 headers={
-                    "apikey": self.supabase_key,
-                    "Authorization": f"Bearer {self.supabase_key}",
+                    "apikey": self.supabase_anon_key, # Use anon key for public schema endpoint
+                    "Authorization": f"Bearer {self.supabase_anon_key}",
                     "Accept": "application/openapi+json",
                 },
                 timeout=30,

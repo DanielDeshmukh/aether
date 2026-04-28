@@ -1,6 +1,9 @@
 import asyncio
 import json
 import os
+import time
+import random
+import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, AsyncIterator, Dict, List, Literal
@@ -17,6 +20,8 @@ try:
     from google import genai
 except ImportError:  # pragma: no cover - resolved when requirements are installed
     genai = None
+
+logger = logging.getLogger("aether.brain")
 
 
 class PlanStep(BaseModel):
@@ -52,7 +57,7 @@ class BrainBoundaryError(Exception):
 @dataclass
 class BrainState:
     scan_id: str
-    target_url: str
+    target_url: str # The URL being scanned
     phase: str = "observe"
     status: BrainStatus = BrainStatus.RUNNING
     current_step: int = 0
@@ -132,6 +137,33 @@ Rules:
 - Output raw JSON only.
 """.strip()
 
+    def _generate_with_retry(self, client, contents, config, max_retries=5):
+        """Generates content with model fallback and exponential backoff for transient errors."""
+        model_options = [self.model_name, "gemini-1.5-flash", "gemini-1.5-pro"]
+        last_exception = None
+
+        for model in model_options:
+            for attempt in range(max_retries):
+                try:
+                    return client.models.generate_content(
+                        model=model,
+                        contents=contents,
+                        config=config,
+                    )
+                except Exception as e:
+                    last_exception = e
+                    error_msg = str(e).upper()
+                    # Check for transient/overload errors (503, 504, 429, Resource Exhausted)
+                    if any(err in error_msg for err in ["503", "504", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED", "DEADLINE_EXCEEDED", "TIMEOUT"]):
+                        wait = (2 ** attempt) + random.uniform(0, 1)
+                        logger.warning("Gemini model %s overloaded. Attempt %d/%d, retrying in %.2fs", model, attempt+1, max_retries, wait)
+                        time.sleep(wait)
+                    else:
+                        # Non-transient error (e.g. invalid auth, safety filters), try next model in chain
+                        logger.error("Gemini model %s failed with non-transient error: %s", model, error_msg)
+                        break
+        raise last_exception or RuntimeError("Gemini failed after retries and model fallback. Check API key and quota.")
+
     def generate_initial_plan(self, target_url: str) -> InitialPlan:
         hostname = urlparse(target_url).netloc.upper()
 
@@ -140,8 +172,8 @@ Rules:
 
         try:
             client = genai.Client(api_key=self.api_key)
-            response = client.models.generate_content(
-                model=self.model_name,
+            response = self._generate_with_retry(
+                client,
                 contents=self._build_prompt(target_url, hostname),
                 config={
                     "response_mime_type": "application/json",
@@ -150,9 +182,8 @@ Rules:
             )
             return self._validate_response(response.text, hostname, target_url)
         except Exception as error:
-            raise BrainBoundaryError(
-                "Gemini planning failed before the scan could start. Check the model configuration and retry."
-            ) from error
+            logger.error("Initial planning failed after retries: %s. Degrading to fallback plan.", str(error))
+            return self._fallback_plan(hostname, target_url)
 
     def _fallback_verdict(self, results: Dict[str, Any]) -> FinalVerdict:
         port_scan_result = results.get("port_scan") or {}
@@ -249,8 +280,8 @@ Rules:
 
         try:
             client = genai.Client(api_key=self.api_key)
-            response = client.models.generate_content(
-                model=self.model_name,
+            response = self._generate_with_retry(
+                client,
                 contents=prompt,
                 config={
                     "response_mime_type": "application/json",
@@ -263,9 +294,8 @@ Rules:
                 cleaned = cleaned.removeprefix("json").strip()
             return FinalVerdict.model_validate_json(cleaned)
         except Exception as error:
-            raise BrainBoundaryError(
-                "Gemini analysis timed out while building the final verdict. The scan was stopped before persistence drifted."
-            ) from error
+            logger.error("Final verdict generation failed after retries: %s. Using fallback verdict.", str(error))
+            return self._fallback_verdict(results)
 
 
 class BrainOrchestrator:

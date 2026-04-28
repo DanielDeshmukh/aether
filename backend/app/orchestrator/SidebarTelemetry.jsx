@@ -25,10 +25,14 @@ const SidebarTelemetry = () => {
         if (!selectedScan) return;
         setIsDownloading(true);
         try {
-            const response = await apiRequest(`/api/v1/scans/${selectedScan.id}/report`);
+            // apiRequest returns the parsed JSON, but for a file download, we need the raw response.
+            // We'll temporarily bypass apiRequest's JSON parsing for this specific endpoint.
+            const { data: { session } } = await supabase.auth.getSession();
+            const response = await fetch(`http://127.0.0.1:8000/api/v1/scans/${selectedScan.id}/report`, {
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
+            });
 
-            if (!response.ok) throw new Error('FETCH_FAILED');
-
+            if (!response.ok) throw new Error('Failed to download report');
             const blob = await response.blob();
             const sanitized = selectedScan.target_url.replace(/[^a-z0-9]/gi, '-').toLowerCase();
             const link = document.createElement('a');

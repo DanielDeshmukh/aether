@@ -133,7 +133,21 @@ def persist_scan_state(scan_id: str, brain: BrainOrchestrator, target_url: str, 
         logger.warning("Attempted to persist scan state without user_id for scan_id=%s", scan_id)
         return False
 
-    persisted = scan_storage.upsert_scan(
+    # If the scan is complete, perform full multi-table persistence
+    if brain.state.status == BrainStatus.COMPLETE:
+        return scan_storage.persist_scan_results(
+            scan_id=scan_id,
+            user_id=user_id,
+            target_url=target_url,
+            brain_status=brain.state.status.value,
+            initial_plan=brain.serialize_initial_plan(),
+            results=brain.serialize_results(),
+            final_report=brain.serialize_final_report(),
+            remediations=brain.serialize_remediations(),
+        )
+
+    # Otherwise, update progress in the main scans table for live dashboard sync
+    return scan_storage.upsert_scan(
         scan_id=scan_id,
         target_url=target_url,
         initial_plan=brain.serialize_initial_plan(),
@@ -143,14 +157,6 @@ def persist_scan_state(scan_id: str, brain: BrainOrchestrator, target_url: str, 
         remediations=brain.serialize_remediations(),
         user_id=user_id,
     )
-    audit_result = brain.serialize_results().get("audit_engine") or {}
-    hunt_persisted = scan_storage.replace_hunt_findings(
-        scan_id=scan_id,
-        user_id=user_id,
-        vulnerabilities=audit_result.get("findings", []),
-        profiles=audit_result.get("profiles", []),
-    )
-    return persisted and hunt_persisted
 
 
 def extract_client_ip(request: Request) -> str | None:
@@ -463,7 +469,7 @@ async def create_scan(
     if not consent_logged:
         raise HTTPException(status_code=503, detail="CONSENT COULD NOT BE PERSISTED. HUNT ABORTED.")
 
-    return create_scan_record(normalized_target, user_id=user_id)
+    return _api_response(success=True, data=create_scan_record(normalized_target, user_id=user_id))
 
 
 @app.websocket("/ws/scan/{scan_id}")
@@ -472,8 +478,14 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
 
     scan = active_scans.get(scan_id)
     brain = brain_sessions.get(scan_id)
+
     if not scan or not brain:
-        await websocket.send_json({"type": "error", "phase": "observe", "msg": "SCAN SESSION NOT FOUND."})
+        await websocket.send_json({
+            "type": "error",
+            "phase": "observe",
+            "msg": "SCAN SESSION NOT FOUND.",
+            "message": "The scan session could not be found. It may have expired or been terminated."
+        })
         await websocket.close(code=1008)
         return
 
@@ -483,7 +495,13 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
     try:
         await brain.ensure_initial_plan()
         try:
-            scan_storage.ensure_schema()
+            # Ensure schema is up-to-date before persisting, but don't crash if it fails
+            try:
+                scan_storage.ensure_schema()
+            except Exception as e:
+                logger.error("Schema sync failed during initial plan persistence for %s: %s", scan_id, str(e))
+                # Continue without schema sync if it fails, persistence might still work
+
             persisted = persist_scan_state(scan_id, brain, target_url, user_id)
             logger.info("Initial scan persistence for %s: %s", scan_id, persisted)
         except Exception:
@@ -505,7 +523,8 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
                 await safe_send_json(
                     websocket,
                     {
-                        "type": "error",
+                        "type": "info", # Changed to info, as termination is an operator action, not an error
+                        "status": "terminated",
                         "phase": "analyze",
                         "msg": "SCAN TERMINATED BY OPERATOR.",
                         "brain": brain.state.snapshot(),
@@ -533,6 +552,12 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
                     )
 
                     try:
+                        # Ensure schema is up-to-date before persisting, but don't crash if it fails
+                        try:
+                            scan_storage.ensure_schema()
+                        except Exception as e:
+                            logger.error("Schema sync failed during plan-stage persistence for %s: %s", scan_id, str(e))
+
                         persisted = persist_scan_state(scan_id, brain, target_url, user_id)
                         logger.info("Plan-stage scan persistence for %s: %s", scan_id, persisted)
                     except Exception:
@@ -541,6 +566,11 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
             if log["phase"] in {"execute", "analyze"}:
                 try:
                     persisted = persist_scan_state(scan_id, brain, target_url, user_id)
+                    # Ensure schema is up-to-date before persisting, but don't crash if it fails
+                    try:
+                        scan_storage.ensure_schema()
+                    except Exception as e:
+                        logger.error("Schema sync failed during %s-stage persistence for %s: %s", log["phase"].capitalize(), scan_id, str(e))
                     logger.info("%s-stage scan persistence for %s: %s", log["phase"].capitalize(), scan_id, persisted)
                 except Exception:
                     logger.exception("%s-stage scan persistence failed for %s", log["phase"].capitalize(), scan_id)
@@ -553,6 +583,7 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
                 "type": "error",
                 "phase": error.phase,
                 "msg": error.message.upper(),
+                "message": "Aether encountered a guarded runtime error. Review the logs for details.",
                 "brain": brain.state.snapshot(),
                 "results": brain.serialize_results(),
                 "final_report": brain.serialize_final_report(),
@@ -569,6 +600,7 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
             {
                 "type": "error",
                 "phase": "analyze",
+                "message": "Aether is currently experiencing high traffic or the model is temporarily unavailable. Your patience is appreciated.",
                 "msg": "UNEXPECTED ORCHESTRATION FAILURE. REVIEW BACKEND LOGS AND RETRY THE SCAN.",
                 "brain": brain.state.snapshot(),
                 "results": brain.serialize_results(),
@@ -578,6 +610,11 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
     finally:
         try:
             persisted = persist_scan_state(scan_id, brain, target_url, user_id)
+            # Ensure schema is up-to-date before persisting, but don't crash if it fails
+            try:
+                scan_storage.ensure_schema()
+            except Exception as e:
+                logger.error("Schema sync failed during final persistence for %s: %s", scan_id, str(e))
             logger.info("Final scan persistence for %s: %s", scan_id, persisted)
         except Exception:
             logger.exception("Final scan persistence failed for %s", scan_id)
@@ -589,7 +626,7 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
 async def kill_scan(scan_id: str, user_id: str = Depends(get_current_user)):
     scan = active_scans.get(scan_id)
     if not scan:
-        return {"status": "scan_not_found"}
+        return _api_response(success=False, error="Scan not found.")
 
     if scan.get("user_id") != user_id:
         raise HTTPException(status_code=403, detail="ACCESS DENIED TO THIS SCAN SESSION.")
@@ -598,7 +635,7 @@ async def kill_scan(scan_id: str, user_id: str = Depends(get_current_user)):
     brain = brain_sessions.get(scan_id)
     if brain:
         brain.terminate()
-    return {"status": "termination_sequence_initiated", "scan_id": scan_id}
+    return _api_response(success=True, data={"status": "termination_sequence_initiated", "scan_id": scan_id})
 
 
 @app.get("/api/v1/scans")
@@ -608,7 +645,7 @@ async def list_scans(user_id: str = Depends(get_current_user)):
     except Exception:
         logger.exception("Schema sync failed before listing scans.")
 
-    return scan_storage.fetch_all_scans(user_id=user_id)
+    return _api_response(success=True, data=scan_storage.fetch_all_scans(user_id=user_id))
 
 
 @app.get("/api/v1/scans/{scan_id}")
@@ -622,7 +659,7 @@ async def get_scan(scan_id: str, current_user: str = Depends(get_current_user)):
     if not record:
         raise HTTPException(status_code=404, detail="SCAN RECORD NOT FOUND.")
 
-    return record
+    return _api_response(success=True, data=record)
 
 
 @app.get("/api/v1/scans/{scan_id}/report")
@@ -668,7 +705,12 @@ async def websocket_remediation(websocket: WebSocket, scan_id: str):
 
     record = scan_storage.fetch_scan(scan_id, user_id=user_id) if user_id else None
     if not record:
-        await websocket.send_json({"type": "error", "phase": "remediate", "msg": "SCAN RECORD NOT FOUND OR ACCESS DENIED."})
+        await websocket.send_json({
+            "type": "error",
+            "phase": "remediate",
+            "msg": "SCAN RECORD NOT FOUND OR ACCESS DENIED.",
+            "message": "The scan record for remediation could not be found or access is denied."
+        })
         await websocket.close(code=1008)
         return
 
@@ -679,7 +721,12 @@ async def websocket_remediation(websocket: WebSocket, scan_id: str):
             payload = await websocket.receive_json()
             action = (payload.get("action") or "").strip().lower()
             if action != "generate_fix":
-                await safe_send_json(websocket, {"type": "error", "phase": "remediate", "msg": "UNKNOWN REMEDIATION ACTION."})
+                await safe_send_json(websocket, {
+                    "type": "error",
+                    "phase": "remediate",
+                    "msg": "UNKNOWN REMEDIATION ACTION.",
+                    "message": "The requested remediation action is not recognized."
+                })
                 continue
 
             vuln_id = (payload.get("vuln_id") or "").strip()
@@ -705,6 +752,7 @@ async def websocket_remediation(websocket: WebSocket, scan_id: str):
             {
                 "type": "error",
                 "phase": "remediate",
+                "message": "Remediation generation failed. Review backend logs and retry.",
                 "msg": "REMEDIATION GENERATION FAILED. REVIEW BACKEND LOGS AND RETRY.",
             },
         )
