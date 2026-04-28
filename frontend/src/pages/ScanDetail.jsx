@@ -36,12 +36,12 @@ const normalizeReport = (finalReport) => {
 const statusTone = (status) => {
   const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
   if (normalized === 'failed') {
-    return 'border-[rgba(255,92,92,0.3)] bg-[rgba(255,92,92,0.08)] text-[#ff7b72]';
+    return 'border-red-500/30 bg-red-500/10 text-red-500';
   }
   if (normalized === 'completed') {
-    return 'border-[rgba(0,255,65,0.3)] bg-[rgba(0,255,65,0.08)] text-[#00ff41]';
+    return 'border-green-500/30 bg-green-500/10 text-green-500';
   }
-  return 'border-[rgba(212,175,55,0.3)] bg-[rgba(212,175,55,0.08)] text-[#d4af37]';
+  return 'border-lambo-gold/30 bg-lambo-gold/10 text-lambo-gold';
 };
 
 const ScanDetail = () => {
@@ -97,10 +97,14 @@ const ScanDetail = () => {
   const scanStatus = typeof scan?.status === 'string' ? scan.status.toUpperCase() : 'PENDING';
   const reportError = finalReport.error_message;
 
-  const handleRemediate = (vulnId) => {
+  const handleRemediate = async (vulnId) => {
     setLoadingFixId(vulnId);
     setRemediationError('');
-    const socket = new WebSocket(buildWsUrl(`/ws/remediation/${scan.id}`));
+    
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    
+    const socket = new WebSocket(buildWsUrl(`/ws/remediation/${scan.id}?user_id=${userId}`));
 
     socket.onopen = () => {
       socket.send(JSON.stringify({ action: 'generate_fix', vuln_id: vulnId }));
@@ -147,67 +151,69 @@ const ScanDetail = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] font-mono text-white">
+    <div className="min-h-screen bg-[#050505] font-lambo text-lambo-white">
       <Header />
       <main className="relative overflow-hidden px-5 pb-16 pt-28 md:px-10">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(212,175,55,0.12),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_22%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,192,0,0.05),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_22%)]" />
 
         <section className="relative mx-auto max-w-7xl space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.42em] text-[#d4af37]">Mission Debrief</p>
-              <h1 className="mt-3 break-all text-3xl font-black uppercase tracking-[-0.06em] text-[#f5f1df] md:text-5xl">
+              <p className="text-[10px] font-bold tracking-[0.4em] text-lambo-gold">// Mission Debrief</p>
+              <h1 className="mt-3 break-all text-3xl font-black tracking-[-0.03em] text-lambo-white md:text-5xl">
                 {scan?.target_url ?? 'Loading Scan'}
               </h1>
             </div>
-            <Link
-              to="/dashboard"
-              className="chamfer-button border border-[rgba(212,175,55,0.34)] bg-[rgba(212,175,55,0.08)] px-4 py-3 text-[10px] font-black uppercase tracking-[0.28em] text-[#d4af37]"
-            >
-              Back
-            </Link>
+            <div className="flex items-center gap-6">
+              <Link
+                to="/dashboard"
+                className="chamfer-button border border-white/10 bg-white/5 px-4 py-3 text-[10px] font-bold tracking-[0.2em] text-lambo-ash transition-colors hover:border-lambo-gold/40 hover:text-lambo-gold"
+              >
+                Back to Dashboard
+              </Link>
+            </div>
           </div>
 
           {error && (
-            <div className="chamfer-panel border border-[rgba(255,0,0,0.32)] bg-[rgba(255,0,0,0.08)] px-5 py-4 text-[10px] font-bold uppercase tracking-[0.28em] text-[#ff5c5c]">
+            <div className="chamfer-panel border border-red-500/30 bg-red-500/10 px-5 py-4 text-[10px] font-bold tracking-[0.28em] text-red-500">
               {error}
             </div>
           )}
 
           {isLoading ? (
-            <div className="chamfer-panel border border-white/10 bg-white/[0.02] p-8 text-[10px] uppercase tracking-[0.3em] text-[#8f8a78]">
+            <div className="chamfer-panel border border-white/10 bg-white/[0.02] p-8 text-[10px] tracking-[0.3em] text-lambo-ash">
               Loading debrief...
             </div>
           ) : scan ? (
             <>
               <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-                <div className="chamfer-panel border border-[rgba(212,175,55,0.24)] bg-[linear-gradient(180deg,rgba(17,17,17,0.98),rgba(9,9,9,0.98))] p-8">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.42em] text-[#d4af37]">Risk Impact</p>
-                  <p className="mt-5 text-xl font-black uppercase leading-10 tracking-[-0.04em] text-[#f5f1df] md:text-2xl">
+                <div className="chamfer-panel border border-lambo-gold/20 bg-[#0d0d0d] p-8">
+                  <p className="text-[10px] font-bold tracking-[0.42em] text-lambo-gold">// Risk Impact</p>
+                  <p className="mt-5 text-lg font-bold tracking-tight text-lambo-white md:text-xl">
                     {finalReport.risk_impact ?? 'Final synthesis pending.'}
                   </p>
                   <div className="mt-8 flex flex-wrap items-center gap-3">
-                    <div className="inline-flex items-center border border-[rgba(212,175,55,0.3)] bg-[rgba(212,175,55,0.08)] px-4 py-3 text-[10px] font-black uppercase tracking-[0.3em] text-[#d4af37]">
-                      Threat Level: {(finalReport.threat_level ?? scan.threat_level ?? 'unknown').toUpperCase()}
+                    <div className="inline-flex items-center border border-lambo-gold/30 bg-lambo-gold/10 px-4 py-3 text-[10px] font-bold tracking-[0.2em] text-lambo-gold">
+                      Threat Level: {finalReport.threat_level ?? scan.threat_level ?? 'unknown'}
                     </div>
-                    <div className={`inline-flex items-center border px-4 py-3 text-[10px] font-black uppercase tracking-[0.3em] ${statusTone(scan?.status)}`}>
-                      Status: {scanStatus}
+                    <div className={`inline-flex items-center border px-4 py-3 text-[10px] font-bold tracking-[0.2em] ${statusTone(scan?.status)}`}>
+                      Status: {scanStatus.charAt(0) + scanStatus.slice(1).toLowerCase()}
                     </div>
                   </div>
                   {reportError && (
-                    <div className="mt-5 chamfer-panel border border-[rgba(255,92,92,0.3)] bg-[rgba(255,92,92,0.08)] p-4 text-[10px] font-bold uppercase tracking-[0.22em] text-[#ff7b72]">
+                    <div className="mt-5 chamfer-panel border border-red-500/30 bg-red-500/10 p-4 text-[10px] font-bold tracking-[0.22em] text-red-500">
                       {reportError}
                     </div>
                   )}
                 </div>
 
-                <div className="chamfer-panel border border-white/10 bg-[rgba(255,255,255,0.02)] p-8">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.42em] text-[#d4af37]">Remediation Steps</p>
+                <div className="chamfer-panel border border-white/10 bg-white/5 p-8">
+                  <p className="text-[10px] font-bold tracking-[0.42em] text-lambo-gold">// Remediation Steps</p>
                   <div className="mt-5 space-y-4">
                     {(finalReport.remediation_steps ?? []).map((step, index) => (
-                      <div key={index} className="chamfer-panel border border-white/8 bg-black/30 p-4">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#d4af37]">Action {index + 1}</p>
-                        <p className="mt-3 text-sm uppercase leading-7 tracking-[0.14em] text-[#f5f1df]">{step}</p>
+                      <div key={index} className="chamfer-panel border border-white/5 bg-black/40 p-4">
+                        <p className="text-[10px] font-bold tracking-[0.28em] text-lambo-gold">Action {index + 1}</p>
+                        <p className="mt-3 text-sm leading-7 tracking-[0.14em] text-lambo-white">{step}</p>
                       </div>
                     ))}
                   </div>
@@ -215,34 +221,36 @@ const ScanDetail = () => {
               </section>
 
               <section className="grid gap-6 xl:grid-cols-2">
-                <div className="chamfer-panel border border-white/10 bg-[rgba(255,255,255,0.02)] p-8">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.42em] text-[#d4af37]">Tool Results</p>
+                <div className="chamfer-panel border border-white/10 bg-white/5 p-8">
+                  <div className="flex items-center justify-between mb-5">
+                    <p className="text-[10px] font-bold tracking-[0.42em] text-lambo-gold">// Vulnerabilities & Remediations</p>
+                  </div>
                   {remediationError && (
-                    <div className="mt-4 chamfer-panel border border-[rgba(255,92,92,0.3)] bg-[rgba(255,92,92,0.08)] px-4 py-3 text-[10px] font-bold uppercase tracking-[0.22em] text-[#ff7b72]">
+                    <div className="mt-4 chamfer-panel border border-red-500/30 bg-red-500/10 px-4 py-3 text-[10px] font-bold tracking-[0.22em] text-red-500">
                       {remediationError}
                     </div>
                   )}
-                  <div className="mt-5 space-y-4 text-[10px] uppercase tracking-[0.22em] text-[#8f8a78]">
-                    <div className="chamfer-panel border border-white/8 bg-black/30 p-4">
-                      <p className="font-bold text-[#d4af37]">Port Scan</p>
-                      <p className="mt-3 text-[#f5f1df]">
+                  <div className="mt-5 space-y-4 text-[10px] tracking-[0.22em] text-lambo-ash">
+                    <div className="chamfer-panel border border-white/5 bg-black/40 p-4">
+                      <p className="font-bold text-lambo-gold">Port Scan</p>
+                      <p className="mt-3 text-lambo-white">
                         Open Ports: {(portScan?.open_ports ?? []).length ? portScan.open_ports.join(', ') : 'None'}
                       </p>
                     </div>
-                    <div className="chamfer-panel border border-white/8 bg-black/30 p-4">
-                      <p className="font-bold text-[#d4af37]">Header Audit</p>
-                      <p className="mt-3 text-[#f5f1df]">
+                    <div className="chamfer-panel border border-white/5 bg-black/40 p-4">
+                      <p className="font-bold text-lambo-gold">Header Audit</p>
+                      <p className="mt-3 text-lambo-white">
                         Findings: {(headerAudit?.findings ?? []).length}
                       </p>
                     </div>
                     {(headerAudit?.findings ?? []).map((finding) => {
                       const remediation = remediations[finding.id];
                       return (
-                        <div key={finding.id} className="chamfer-panel border border-white/8 bg-black/30 p-4">
+                        <div key={finding.id} className="chamfer-panel border border-white/5 bg-black/40 p-4">
                           <div className="flex items-start justify-between gap-4">
                             <div>
-                              <p className="font-bold text-[#d4af37]">{finding.header}</p>
-                              <p className="mt-2 text-[10px] uppercase leading-6 tracking-[0.16em] text-[#f5f1df]">
+                              <p className="font-bold text-lambo-gold">{finding.header}</p>
+                              <p className="mt-2 text-[10px] uppercase leading-6 tracking-[0.16em] text-lambo-white">
                                 {finding.detail}
                               </p>
                             </div>
@@ -250,54 +258,54 @@ const ScanDetail = () => {
                               type="button"
                               onClick={() => handleRemediate(finding.id)}
                               disabled={loadingFixId === finding.id}
-                              className="chamfer-button border border-[rgba(212,175,55,0.34)] bg-[rgba(212,175,55,0.08)] px-4 py-3 text-[10px] font-black uppercase tracking-[0.24em] text-[#d4af37] disabled:opacity-50"
+                              className="chamfer-button border border-lambo-gold/30 bg-lambo-gold/10 px-4 py-3 text-[10px] font-bold tracking-[0.2em] text-lambo-gold disabled:opacity-50 hover:bg-lambo-gold/20 transition-colors"
                             >
-                              {loadingFixId === finding.id ? 'Generating...' : 'Remediate'}
+                              {loadingFixId === finding.id ? 'Generating...' : 'Gemini Remediate'}
                             </button>
                           </div>
                           {loadingFixId === finding.id && !remediation && (
-                            <div className="mt-4 chamfer-panel border border-[rgba(212,175,55,0.22)] bg-[rgba(212,175,55,0.05)] p-4">
+                            <div className="mt-4 chamfer-panel border border-lambo-gold/20 bg-lambo-gold/5 p-4">
                               <div className="flex items-center justify-between gap-3">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#d4af37]">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-lambo-gold">
                                   Calculating Remediation
                                 </p>
                                 <div className="flex gap-1">
-                                  <span className="h-2 w-2 rounded-full bg-[#d4af37] animate-bounce [animation-delay:-0.3s]" />
-                                  <span className="h-2 w-2 rounded-full bg-[#d4af37] animate-bounce [animation-delay:-0.15s]" />
-                                  <span className="h-2 w-2 rounded-full bg-[#d4af37] animate-bounce" />
+                                  <span className="h-2 w-2 rounded-full bg-lambo-gold animate-bounce [animation-delay:-0.3s]" />
+                                  <span className="h-2 w-2 rounded-full bg-lambo-gold animate-bounce [animation-delay:-0.15s]" />
+                                  <span className="h-2 w-2 rounded-full bg-lambo-gold animate-bounce" />
                                 </div>
                               </div>
                               <div className="mt-4 space-y-3">
-                                <div className="h-3 w-1/3 bg-[rgba(212,175,55,0.18)]" />
-                                <div className="h-3 w-full bg-[rgba(255,255,255,0.06)]" />
-                                <div className="h-3 w-5/6 bg-[rgba(255,255,255,0.06)]" />
-                                <div className="h-28 w-full bg-[rgba(255,255,255,0.04)]" />
+                                <div className="h-3 w-1/3 bg-lambo-gold/20" />
+                                <div className="h-3 w-full bg-white/10" />
+                                <div className="h-3 w-5/6 bg-white/10" />
+                                <div className="h-28 w-full bg-white/5" />
                               </div>
                             </div>
                           )}
                           {remediation && (
                             <div className="mt-4 space-y-3">
                               <div className="flex flex-wrap items-center justify-between gap-3">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#d4af37]">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-lambo-cyan">
                                   {remediation.title}
                                 </p>
                                 <button
                                   type="button"
                                   onClick={() => handleCopy(finding.id, remediation.code)}
-                                  className="chamfer-button border border-[rgba(212,175,55,0.34)] bg-[rgba(212,175,55,0.08)] px-3 py-2 text-[10px] font-black uppercase tracking-[0.22em] text-[#d4af37]"
+                                  className="chamfer-button border border-lambo-gold/30 bg-lambo-gold/10 px-3 py-2 text-[10px] font-bold tracking-[0.15em] text-lambo-gold hover:bg-lambo-gold/20 transition-colors"
                                 >
                                   {copiedFixId === finding.id ? 'Copied' : 'Copy to Clipboard'}
                                 </button>
                               </div>
-                              <p className="text-[10px] uppercase leading-6 tracking-[0.16em] text-[#f5f1df]">
+                              <p className="text-[10px] uppercase leading-6 tracking-[0.16em] text-lambo-white">
                                 {remediation.summary}
                               </p>
-                              <div className="chamfer-panel border border-[rgba(212,175,55,0.3)] bg-[rgba(212,175,55,0.08)] p-[1px]">
-                                <div className="bg-[#0a0a0a] p-4">
-                                  <div className="mb-3 text-[10px] font-bold uppercase tracking-[0.28em] text-[#d4af37]">
+                              <div className="chamfer-panel border border-lambo-gold/30 bg-lambo-gold/10 p-[1px]">
+                                <div className="bg-lambo-charcoal p-4">
+                                  <div className="mb-3 text-[10px] font-bold uppercase tracking-[0.28em] text-lambo-gold">
                                     {remediation.language}
                                   </div>
-                                  <pre className="overflow-x-auto whitespace-pre-wrap break-words text-sm leading-7 text-[#f0d77c]">
+                                  <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-sm leading-7 text-lambo-gold">
                                     <code>{remediation.code}</code>
                                   </pre>
                                 </div>
@@ -310,13 +318,13 @@ const ScanDetail = () => {
                   </div>
                 </div>
 
-                <div className="chamfer-panel border border-white/10 bg-[rgba(255,255,255,0.02)] p-8">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.42em] text-[#d4af37]">Gemini Strategy Trace</p>
+                <div className="chamfer-panel border border-white/10 bg-white/5 p-8">
+                  <p className="text-[10px] font-bold tracking-[0.42em] text-lambo-gold">// Gemini Strategy Trace</p>
                   <div className="mt-5 space-y-4">
                     {planSteps.map((step, index) => (
-                      <div key={index} className="chamfer-panel border border-white/8 bg-black/30 p-4">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#d4af37]">{step.label ?? `STEP ${index + 1}`}</p>
-                        <p className="mt-3 text-sm uppercase leading-7 tracking-[0.14em] text-[#f5f1df]">{step.message ?? 'Unavailable'}</p>
+                      <div key={index} className="chamfer-panel border border-white/5 bg-black/40 p-4">
+                        <p className="text-[10px] font-bold tracking-[0.28em] text-lambo-gold">{step.label ?? `Step ${index + 1}`}</p>
+                        <p className="mt-3 text-sm leading-7 tracking-[0.14em] text-lambo-white">{step.message ?? 'Unavailable'}</p>
                       </div>
                     ))}
                   </div>
@@ -324,7 +332,7 @@ const ScanDetail = () => {
               </section>
             </>
           ) : (
-            <div className="chamfer-panel border border-white/10 bg-white/[0.02] p-8 text-[10px] uppercase tracking-[0.3em] text-[#8f8a78]">
+            <div className="chamfer-panel border border-white/10 bg-white/[0.02] p-8 text-[10px] uppercase tracking-[0.3em] text-lambo-ash">
               Scan not found.
             </div>
           )}

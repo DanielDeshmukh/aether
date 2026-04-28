@@ -70,7 +70,6 @@ const JoinUs = () => {
       <div className="absolute -top-24 -left-24 w-96 h-96 bg-lambo-gold/5 rounded-full blur-[120px]"></div>
 
       <div className="w-full max-w-md relative z-10">
-        {/* Header */}
         <div className="text-center mb-10">
           <div className="flex justify-center items-center gap-3 mb-4">
             <div className="w-10 h-[1px] bg-lambo-gold"></div>

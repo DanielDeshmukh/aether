@@ -47,7 +47,7 @@ const Footer = () => {
           <p className="text-[9px] text-lambo-ash tracking-[0.2em] uppercase">
             © 2026 AETHER PLATFORM // ALL RIGHTS RESERVED
           </p>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 opacity-10">
             <span className="text-[9px] text-lambo-ash tracking-[0.2em] uppercase">Built for Dominance</span>
             <div className="w-1 h-1 bg-lambo-gold rounded-full"></div>
             <span className="text-[9px] text-lambo-gold tracking-[0.3em] uppercase font-bold">

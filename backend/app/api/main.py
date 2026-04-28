@@ -1,21 +1,25 @@
 import asyncio
+import base64
 import io
 import json
 import logging
 import os
+import tempfile
 import uuid
 from pathlib import Path
 from typing import Dict, List
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.orchestrator.brain import BrainBoundaryError, BrainOrchestrator, BrainStatus
 from app.services.storage import ScanStorage
+from app.api.deps import get_current_user
+from app.tools.validators import is_safe_url
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
@@ -24,7 +28,6 @@ logger = logging.getLogger("aether.api")
 
 class ScanCreateRequest(BaseModel):
     target_url: str = Field(min_length=3)
-    user_id: str | None = None
     consent_confirmed: bool = False
 
 def get_allowed_origins() -> List[str]:
@@ -113,6 +116,10 @@ async def safe_send_json(websocket: WebSocket, payload: dict) -> None:
 
 
 def persist_scan_state(scan_id: str, brain: BrainOrchestrator, target_url: str, user_id: str | None) -> bool:
+    if not user_id:
+        logger.warning("Attempted to persist scan state without user_id for scan_id=%s", scan_id)
+        return False
+
     persisted = scan_storage.upsert_scan(
         scan_id=scan_id,
         target_url=target_url,
@@ -121,11 +128,12 @@ def persist_scan_state(scan_id: str, brain: BrainOrchestrator, target_url: str, 
         results=brain.serialize_results(),
         final_report=brain.serialize_final_report(),
         remediations=brain.serialize_remediations(),
-        user_id=str(user_id) if user_id else None,
+        user_id=user_id,
     )
     audit_result = brain.serialize_results().get("audit_engine") or {}
     hunt_persisted = scan_storage.replace_hunt_findings(
         scan_id=scan_id,
+        user_id=user_id,
         vulnerabilities=audit_result.get("findings", []),
         profiles=audit_result.get("profiles", []),
     )
@@ -139,61 +147,228 @@ def extract_client_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
 
 
-def render_pdf_report(scan: dict, vulnerabilities: list[dict], profiles: list[dict]) -> bytes:
+async def render_pdf_report(scan: dict, vulnerabilities: list[dict], profiles: list[dict]) -> bytes:
     try:
-        from fpdf import FPDF
+        from playwright.async_api import async_playwright
     except ImportError as error:
-        raise HTTPException(status_code=503, detail="PDF reporting dependency is not installed.") from error
+        raise HTTPException(status_code=503, detail="PDF reporting dependency (Playwright) is not installed.") from error
 
-    pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=14)
-    pdf.add_page()
-    content_width = pdf.w - pdf.l_margin - pdf.r_margin
-    pdf.set_font("Helvetica", "B", 20)
-    pdf.cell(content_width, 12, "AETHER Security Audit", ln=True)
-    pdf.set_font("Helvetica", "", 10)
-    pdf.cell(content_width, 8, f"Target: {scan.get('target_url', 'unknown')}", ln=True)
-    pdf.cell(content_width, 8, f"Scan ID: {scan.get('id', 'unknown')}", ln=True)
-    pdf.cell(content_width, 8, f"Status: {scan.get('status', 'unknown')}", ln=True)
-    pdf.cell(content_width, 8, f"Threat Level: {scan.get('threat_level', 'unknown')}", ln=True)
-    pdf.ln(4)
+    # Load logo as base64
+    logo_base64 = ""
+    try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        logo_path = os.path.join(current_dir, "..", "..", "..", "..", "frontend", "public", "images", "logo.png")
+        if os.path.exists(logo_path):
+            with open(logo_path, "rb") as f:
+                logo_base64 = base64.b64encode(f.read()).decode()
+    except Exception:
+        logger.exception("Failed to load logo for PDF")
 
-    pdf.set_font("Helvetica", "B", 14)
-    pdf.cell(content_width, 10, "Detected Vulnerabilities", ln=True)
-    pdf.set_font("Helvetica", "", 10)
+    target_url = scan.get("target_url", "unknown")
+    
+    # Map vulnerabilities to HTML
+    vulnerabilities_content = ""
     if not vulnerabilities:
-        pdf.multi_cell(content_width, 6, "No persisted vulnerabilities were available for this hunt.")
-    for vulnerability in vulnerabilities:
-        pdf.set_font("Helvetica", "B", 11)
-        pdf.multi_cell(content_width, 7, f"{vulnerability.get('title', 'Untitled Finding')} [{vulnerability.get('severity', 'unknown').upper()}]")
-        pdf.set_font("Helvetica", "", 10)
-        pdf.multi_cell(content_width, 6, vulnerability.get("detail", "No detail provided."))
-        evidence = vulnerability.get("evidence") or {}
-        if evidence:
-            pdf.multi_cell(content_width, 6, f"Evidence: {json.dumps(evidence, ensure_ascii=True)}")
-        pdf.ln(2)
+        vulnerabilities_content = "No vulnerabilities detected."
+    else:
+        for v in vulnerabilities:
+            title = v.get("title", "Untitled Finding")
+            severity = v.get("severity", "unknown").upper()
+            detail = v.get("detail", "No detail provided.")
+            vulnerabilities_content += f"{title} [{severity}] - {detail}\n"
 
-    pdf.set_font("Helvetica", "B", 14)
-    pdf.cell(content_width, 10, "Profiles", ln=True)
-    pdf.set_font("Helvetica", "", 10)
-    if not profiles:
-        pdf.multi_cell(content_width, 6, "No persisted resilience profiles were available for this hunt.")
-    for profile in profiles:
-        pdf.set_font("Helvetica", "B", 11)
-        pdf.multi_cell(content_width, 7, profile.get("label", "Untitled Profile"))
-        pdf.set_font("Helvetica", "", 10)
-        pdf.multi_cell(content_width, 6, profile.get("summary", ""))
-        details = profile.get("details") or {}
-        if details:
-            pdf.multi_cell(content_width, 6, f"Details: {json.dumps(details, ensure_ascii=True)}")
-        pdf.ln(2)
+    # Map diagnosis to HTML
+    final_report = scan.get("final_report") or {}
+    diagnosis_content = final_report.get("synthesis") or final_report.get("report") or "No diagnosis available."
 
-    output = pdf.output(dest="S")
-    if isinstance(output, bytearray):
-        return bytes(output)
-    if isinstance(output, str):
-        return output.encode("latin-1")
-    return bytes(output)
+    html_template = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono&display=swap');
+        
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        
+        html, body {{
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            background-color: #0a0a0a !important;
+            color: #ffffff !important;
+            margin: 0;
+            padding: 0;
+        }}
+
+        body {{
+            font-family: 'Inter', sans-serif;
+            padding: 60px 50px;
+        }}
+
+        .header {{ 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 50px;
+            border-bottom: 1px solid #1A1A1A;
+            padding-bottom: 30px;
+        }}
+
+        .logo-wrap {{ display: flex; align-items: center; gap: 15px; }}
+        .logo-img {{ height: 32px; width: auto; }}
+        .brand {{ 
+            font-weight: 900; 
+            letter-spacing: 0.4em; 
+            font-size: 22px; 
+            color: #ffffff; 
+            text-transform: uppercase;
+        }}
+
+        .report-type {{ 
+            color: #d4af37 !important; 
+            font-weight: 900; 
+            font-size: 14px; 
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            border: 1px solid #d4af37;
+            padding: 8px 16px;
+        }}
+
+        .banner {{ 
+            background: #111111 !important; 
+            border: 1px solid #1A1A1A; 
+            padding: 30px; 
+            margin-bottom: 40px; 
+            border-left: 5px solid #d4af37 !important;
+        }}
+
+        .target-label {{ 
+            color: #d4af37 !important; 
+            font-family: 'JetBrains Mono', monospace; 
+            font-size: 11px; 
+            text-transform: uppercase; 
+            letter-spacing: 0.15em;
+            display: block;
+            margin-bottom: 10px;
+        }}
+
+        .target-url {{ 
+            font-family: 'JetBrains Mono', monospace; 
+            font-size: 18px; 
+            font-weight: 700;
+            color: #ffffff;
+        }}
+
+        .section {{ 
+            margin-bottom: 40px; 
+        }}
+
+        .section-title {{ 
+            color: #d4af37 !important; 
+            font-weight: 900; 
+            font-size: 16px; 
+            margin-bottom: 25px; 
+            display: flex;
+            align-items: center;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }}
+
+        .section-title::before {{ 
+            content: ""; 
+            display: inline-block;
+            width: 30px;
+            height: 1px;
+            background: #d4af37;
+            margin-right: 15px;
+        }}
+
+        .content-card {{ 
+            background: #0d0d0d !important;
+            border: 1px solid #1A1A1A;
+            padding: 30px;
+            position: relative;
+        }}
+
+        .item-text {{ 
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px; 
+            line-height: 1.8; 
+            white-space: pre-wrap; 
+            color: #e5e5e5;
+        }}
+
+        .footer {{
+            position: fixed;
+            bottom: 40px;
+            left: 50px;
+            right: 50px;
+            border-top: 1px solid #1A1A1A;
+            padding-top: 20px;
+            display: flex;
+            justify-content: space-between;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            color: #555555;
+            text-transform: uppercase;
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo-wrap">
+            {"<img src='data:image/png;base64," + logo_base64 + "' class='logo-img' />" if logo_base64 else ""}
+            <span class="brand">AETHER</span>
+        </div>
+        <div class="report-type">Mission Debrief</div>
+    </div>
+
+    <div class="banner">
+        <span class="target-label">Primary Intelligence Target</span>
+        <span class="target-url">{target_url}</span>
+    </div>
+
+    <div class="section">
+        <span class="section-title">Surface Vulnerabilities</span>
+        <div class="content-card">
+            <p class="item-text">{vulnerabilities_content}</p>
+        </div>
+    </div>
+
+    <div class="section">
+        <span class="section-title">Agentic Diagnosis</span>
+        <div class="content-card">
+            <p class="item-text">{diagnosis_content}</p>
+        </div>
+    </div>
+
+    <div class="footer">
+        <span>AETHER OS v1.0 // Automated Heuristic Evaluation</span>
+        <span>Secure Transmission // Confidential</span>
+    </div>
+</body>
+</html>"""
+
+    # Ensure cleanup requirement: write to temp file then delete
+    with tempfile.NamedTemporaryFile(suffix=".html", delete=False, mode="w", encoding="utf-8") as tf:
+        tf.write(html_template)
+        temp_path = tf.name
+
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+            await page.goto(f"file://{temp_path}")
+            # Wait for content to render if needed, but since it's static HTML, it should be fast
+            pdf_bytes = await page.pdf(
+                format="A4",
+                print_background=True,
+                margin={"top": "0px", "right": "0px", "bottom": "0px", "left": "0px"}
+            )
+            await browser.close()
+            return pdf_bytes
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
 
 @app.get("/health")
@@ -222,11 +397,18 @@ async def api_healthcheck():
 async def create_scan(
     payload: ScanCreateRequest,
     request: Request,
+    user_id: str = Depends(get_current_user),
 ):
     try:
         normalized_target = normalize_target(payload.target_url)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+
+    if not is_safe_url(normalized_target):
+        raise HTTPException(
+            status_code=400,
+            detail="Forbidden target: Internal or private network scanning is not allowed."
+        )
 
     if not payload.consent_confirmed:
         raise HTTPException(status_code=400, detail="CONSENT CONFIRMATION IS REQUIRED BEFORE A HUNT CAN START.")
@@ -238,14 +420,14 @@ async def create_scan(
         raise HTTPException(status_code=503, detail="CONSENT LOGGING IS UNAVAILABLE. COMPLETE DATABASE SETUP AND RETRY.")
 
     consent_logged = scan_storage.log_consent(
-        user_id=payload.user_id,
+        user_id=user_id,
         target_url=normalized_target,
         ip_address=extract_client_ip(request),
     )
     if not consent_logged:
         raise HTTPException(status_code=503, detail="CONSENT COULD NOT BE PERSISTED. HUNT ABORTED.")
 
-    return create_scan_record(normalized_target, user_id=payload.user_id)
+    return create_scan_record(normalized_target, user_id=user_id)
 
 
 @app.websocket("/ws/scan/{scan_id}")
@@ -368,10 +550,13 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
 
 
 @app.post("/api/v1/scan/kill/{scan_id}")
-async def kill_scan(scan_id: str):
+async def kill_scan(scan_id: str, user_id: str = Depends(get_current_user)):
     scan = active_scans.get(scan_id)
     if not scan:
         return {"status": "scan_not_found"}
+
+    if scan.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="ACCESS DENIED TO THIS SCAN SESSION.")
 
     scan["active"] = False
     brain = brain_sessions.get(scan_id)
@@ -380,21 +565,52 @@ async def kill_scan(scan_id: str):
     return {"status": "termination_sequence_initiated", "scan_id": scan_id}
 
 
+@app.get("/api/v1/scans")
+async def list_scans(user_id: str = Depends(get_current_user)):
+    try:
+        scan_storage.ensure_schema()
+    except Exception:
+        logger.exception("Schema sync failed before listing scans.")
+
+    return scan_storage.fetch_all_scans(user_id=user_id)
+
+
+@app.get("/api/v1/scans/{scan_id}")
+async def get_scan(scan_id: str, current_user: str = Depends(get_current_user)):
+    try:
+        scan_storage.ensure_schema()
+    except Exception:
+        logger.exception("Schema sync failed before fetching scan %s", scan_id)
+
+    record = scan_storage.fetch_scan(scan_id=scan_id, user_id=current_user)
+    if not record:
+        raise HTTPException(status_code=404, detail="SCAN RECORD NOT FOUND.")
+
+    return record
+
+
 @app.get("/api/v1/scans/{scan_id}/report")
-async def download_scan_report(scan_id: str):
+async def download_scan_report(scan_id: str, user_id: str = Depends(get_current_user)):
     try:
         scan_storage.ensure_schema()
     except Exception:
         logger.exception("Schema sync failed before PDF generation for %s", scan_id)
 
-    record = scan_storage.fetch_scan(scan_id)
+    record = scan_storage.fetch_scan(scan_id, user_id=user_id)
     if not record:
+        logger.warning("Download attempt failed: Scan %s not found for user %s", scan_id, user_id)
         raise HTTPException(status_code=404, detail="SCAN RECORD NOT FOUND.")
 
-    vulnerabilities = scan_storage.fetch_vulnerabilities(scan_id)
-    profiles = scan_storage.fetch_profiles(scan_id)
-    pdf_bytes = render_pdf_report(record, vulnerabilities, profiles)
-    filename = f"aether-security-audit-{scan_id}.pdf"
+    vulnerabilities = scan_storage.fetch_vulnerabilities(scan_id, user_id=user_id)
+    profiles = scan_storage.fetch_profiles(scan_id, user_id=user_id)
+    pdf_bytes = await render_pdf_report(record, vulnerabilities, profiles)
+    
+    target_url = record.get("target_url", "unknown")
+    import re
+    sanitized_url = re.sub(r'[^a-z0-9]', '-', target_url.lower())
+    # Remove leading/trailing hyphens and multiple hyphens
+    sanitized_url = re.sub(r'-+', '-', sanitized_url).strip('-')
+    filename = f"aether-diagnosis-{sanitized_url}.pdf"
 
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
@@ -412,9 +628,11 @@ async def websocket_remediation(websocket: WebSocket, scan_id: str):
     except Exception:
         logger.exception("Remediation schema sync failed for %s", scan_id)
 
-    record = scan_storage.fetch_scan(scan_id)
+    user_id = websocket.query_params.get("user_id")
+
+    record = scan_storage.fetch_scan(scan_id, user_id=user_id) if user_id else None
     if not record:
-        await websocket.send_json({"type": "error", "phase": "remediate", "msg": "SCAN RECORD NOT FOUND."})
+        await websocket.send_json({"type": "error", "phase": "remediate", "msg": "SCAN RECORD NOT FOUND OR ACCESS DENIED."})
         await websocket.close(code=1008)
         return
 
@@ -430,7 +648,7 @@ async def websocket_remediation(websocket: WebSocket, scan_id: str):
 
             vuln_id = (payload.get("vuln_id") or "").strip()
             remediation = await brain.generate_fix(vuln_id)
-            persisted = scan_storage.save_remediations(scan_id=scan_id, remediations=brain.serialize_remediations())
+            persisted = scan_storage.save_remediations(scan_id=scan_id, user_id=user_id, remediations=brain.serialize_remediations())
             await safe_send_json(
                 websocket,
                 {

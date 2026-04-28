@@ -2,6 +2,7 @@ import os
 import re
 import uuid
 from datetime import datetime, timezone
+import logging
 from typing import Any, Dict
 
 import psycopg
@@ -22,11 +23,13 @@ class ScanStorage:
             self._get_first_env("DATABASE_URL", "DB_CONNECTION_STRING")
         )
         self.table_name = "scans"
+        self.sessions_table = "scan_sessions"
         self.vulnerabilities_table = "vulnerabilities"
         self.profiles_table = "profiles"
         self.consent_logs_table = "consent_logs"
         self._client: Client | None = None
         self._schema_cache: Dict[str, Any] | None = None
+        self._logger = logging.getLogger("aether.storage")
 
     def mask_value(self, value: str, visible: int = 6) -> str:
         if not value:
@@ -127,6 +130,36 @@ class ScanStorage:
             return str(uuid.UUID(scan_id))
         except ValueError:
             return self.build_record_identifier(scan_id)
+
+    def _scan_query(self, user_id: str, select_clause: str = "*") -> Any:
+        client = self.get_client()
+        if client is None:
+            return None
+        return client.table(self.table_name).select(select_clause).eq("user_id", user_id)
+
+    def _fetch_owned_scan(self, scan_id: str, user_id: str, select_clause: str = "*") -> Dict[str, Any] | None:
+        query = self._scan_query(user_id=user_id, select_clause=select_clause)
+        if query is None:
+            return None
+
+        response = query.eq("id", self.resolve_record_identifier(scan_id)).limit(1).execute()
+        data = getattr(response, "data", None) or []
+        return data[0] if data else None
+
+    def _scan_exists_for_another_user(self, scan_id: str, user_id: str) -> bool:
+        client = self.get_client()
+        if client is None:
+            return False
+
+        response = (
+            client.table(self.table_name)
+            .select("id,user_id")
+            .eq("id", self.resolve_record_identifier(scan_id))
+            .limit(1)
+            .execute()
+        )
+        data = getattr(response, "data", None) or []
+        return bool(data) and data[0].get("user_id") != user_id
 
     def normalize_status(self, brain_status: str) -> str:
         normalized = (brain_status or "").strip().lower()
@@ -329,18 +362,27 @@ class ScanStorage:
         target_url: str,
         initial_plan: Dict[str, Any],
         brain_status: str,
+        user_id: str,
         results: Dict[str, Any] | None = None,
         final_report: Dict[str, Any] | None = None,
         remediations: Dict[str, Any] | None = None,
-        user_id: str | None = None,
     ) -> bool:
         client = self.get_client()
         if client is None:
             return False
 
+        if self._scan_exists_for_another_user(scan_id=scan_id, user_id=user_id):
+            self._logger.warning(
+                "Blocked cross-tenant scan upsert for scan_id=%s and user_id=%s",
+                scan_id,
+                user_id,
+            )
+            return False
+
         persisted_status = self.normalize_status(brain_status)
         payload = {
             "id": self.build_record_identifier(scan_id),
+            "user_id": user_id,
             "target_url": target_url,
             "status": persisted_status,
             "threat_level": (final_report or {}).get("threat_level", self.default_threat_level(persisted_status)),
@@ -350,8 +392,6 @@ class ScanStorage:
             "final_report": final_report or {},
             "remediations": remediations or {},
         }
-        if user_id:
-            payload["user_id"] = user_id
         if persisted_status == "completed":
             payload["completed_at"] = datetime.now(timezone.utc).isoformat()
 
@@ -359,18 +399,17 @@ class ScanStorage:
         data = getattr(response, "data", None)
         return data is not None
 
-    def log_consent(self, user_id: str | None, target_url: str, ip_address: str | None) -> bool:
+    def log_consent(self, user_id: str, target_url: str, ip_address: str | None) -> bool:
         client = self.get_client()
         if client is None:
             return False
 
         payload = {
+            "user_id": user_id,
             "target_url": target_url,
             "ip_address": ip_address,
             "confirmed_at": datetime.now(timezone.utc).isoformat(),
         }
-        if user_id:
-            payload["user_id"] = user_id
 
         response = client.table(self.consent_logs_table).insert(payload).execute()
         return getattr(response, "data", None) is not None
@@ -378,6 +417,7 @@ class ScanStorage:
     def replace_hunt_findings(
         self,
         scan_id: str,
+        user_id: str,
         vulnerabilities: list[Dict[str, Any]],
         profiles: list[Dict[str, Any]],
     ) -> bool:
@@ -386,6 +426,12 @@ class ScanStorage:
             return False
 
         resolved_scan_id = self.resolve_record_identifier(scan_id)
+
+        # Verify ownership before deletion
+        scan_check = client.table(self.table_name).select("id").eq("id", resolved_scan_id).eq("user_id", user_id).execute()
+        if not getattr(scan_check, "data", None):
+            return False
+
         client.table(self.vulnerabilities_table).delete().eq("scan_id", resolved_scan_id).execute()
         client.table(self.profiles_table).delete().eq("scan_id", resolved_scan_id).execute()
 
@@ -423,7 +469,7 @@ class ScanStorage:
 
         return success
 
-    def save_remediations(self, scan_id: str, remediations: Dict[str, Any]) -> bool:
+    def save_remediations(self, scan_id: str, user_id: str, remediations: Dict[str, Any]) -> bool:
         client = self.get_client()
         if client is None:
             return False
@@ -432,49 +478,83 @@ class ScanStorage:
             client.table(self.table_name)
             .update({"remediations": remediations})
             .eq("id", self.resolve_record_identifier(scan_id))
+            .eq("user_id", user_id)
             .execute()
         )
         return getattr(response, "data", None) is not None
 
-    def fetch_scan(self, scan_id: str) -> Dict[str, Any] | None:
-        client = self.get_client()
-        if client is None:
-            return None
+    def fetch_scan(self, scan_id: str, user_id: str) -> Dict[str, Any] | None:
+        try:
+            return self._fetch_owned_scan(scan_id=scan_id, user_id=user_id)
+        except Exception as error:
+            from fastapi import HTTPException
+            self._logger.error("Scan retrieval failed: %s", str(error))
+            raise HTTPException(status_code=500, detail="DATA_RETRIEVAL_FAILURE")
 
-        response = (
-            client.table(self.table_name)
-            .select("*")
-            .eq("id", self.resolve_record_identifier(scan_id))
-            .limit(1)
-            .execute()
-        )
-        data = getattr(response, "data", None) or []
-        return data[0] if data else None
-
-    def fetch_vulnerabilities(self, scan_id: str) -> list[Dict[str, Any]]:
+    def fetch_vulnerabilities(self, scan_id: str, user_id: str) -> list[Dict[str, Any]]:
         client = self.get_client()
         if client is None:
             return []
 
-        response = (
-            client.table(self.vulnerabilities_table)
-            .select("*")
-            .eq("scan_id", self.resolve_record_identifier(scan_id))
-            .order("created_at")
-            .execute()
-        )
-        return getattr(response, "data", None) or []
+        try:
+            # First verify the scan belongs to the user
+            scan = self.fetch_scan(scan_id, user_id)
+            if not scan:
+                return []
 
-    def fetch_profiles(self, scan_id: str) -> list[Dict[str, Any]]:
+            resolved_scan_id = self.resolve_record_identifier(scan_id)
+            response = (
+                client.table(self.vulnerabilities_table)
+                .select("*")
+                .eq("scan_id", resolved_scan_id)
+                .order("created_at")
+                .execute()
+            )
+            return getattr(response, "data", None) or []
+        except Exception as error:
+            from fastapi import HTTPException
+            self._logger.error("Vulnerability retrieval failed: %s", str(error))
+            raise HTTPException(status_code=500, detail="DATA_RETRIEVAL_FAILURE")
+
+    def fetch_profiles(self, scan_id: str, user_id: str) -> list[Dict[str, Any]]:
         client = self.get_client()
         if client is None:
             return []
 
-        response = (
-            client.table(self.profiles_table)
-            .select("*")
-            .eq("scan_id", self.resolve_record_identifier(scan_id))
-            .order("created_at")
-            .execute()
-        )
-        return getattr(response, "data", None) or []
+        try:
+            # First verify the scan belongs to the user
+            scan = self.fetch_scan(scan_id, user_id)
+            if not scan:
+                return []
+
+            resolved_scan_id = self.resolve_record_identifier(scan_id)
+            response = (
+                client.table(self.profiles_table)
+                .select("*")
+                .eq("scan_id", resolved_scan_id)
+                .order("created_at")
+                .execute()
+            )
+            return getattr(response, "data", None) or []
+        except Exception as error:
+            from fastapi import HTTPException
+            self._logger.error("Profile retrieval failed: %s", str(error))
+            raise HTTPException(status_code=500, detail="DATA_RETRIEVAL_FAILURE")
+
+    def fetch_all_scans(self, user_id: str, limit: int = 12) -> list[Dict[str, Any]]:
+        client = self.get_client()
+        if client is None:
+            return []
+
+        try:
+            response = (
+                self._scan_query(user_id=user_id)
+                .order("created_at", ascending=False)
+                .limit(limit)
+                .execute()
+            )
+            return getattr(response, "data", None) or []
+        except Exception as error:
+            from fastapi import HTTPException
+            self._logger.error("Scans list retrieval failed: %s", str(error))
+            raise HTTPException(status_code=500, detail="DATA_RETRIEVAL_FAILURE")

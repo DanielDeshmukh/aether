@@ -34,14 +34,6 @@ const Hero = () => {
           </div>
         </div>
       </div>
-
-      <div className="absolute bottom-4 md:bottom-6 left-4 md:left-6 flex flex-col sm:flex-row items-start sm:items-center gap-2 md:gap-4 text-[8px] md:text-[9px] text-lambo-ash tracking-[0.2em]">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 bg-lambo-gold"></div>
-          <span>Status: Operational</span>
-        </div>
-        <span className="opacity-70">Location: Secure Edge // 142.12.0.1</span>
-      </div>
     </section>
   );
 };

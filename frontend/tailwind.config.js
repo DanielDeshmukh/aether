@@ -8,7 +8,7 @@ export default {
     extend: {
       colors: {
         'lambo-black': '#000000',
-        'lambo-gold': '#FFC000',
+        'lambo-gold': '#FFC107',
         'lambo-gold-dark': '#917300',
         'lambo-white': '#FFFFFF',
         'lambo-charcoal': '#202020',
@@ -17,6 +17,7 @@ export default {
       },
       fontFamily: {
         lambo: ['Inter', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace'],
       }
     },
   },
