@@ -71,10 +71,9 @@ brain_sessions: Dict[str, BrainOrchestrator] = {}
 scan_storage = ScanStorage()
 
 logger.warning(
-    "Supabase backend target: url=%s configured=%s service_role=%s",
-    scan_storage.masked_supabase_url(),
-    scan_storage.configured(),
-    scan_storage.using_service_role_key(),
+    "PostgreSQL persistence target: database_configured=%s legacy_supabase_configured=%s",
+    scan_storage.database_configured(),
+    bool(scan_storage.masked_supabase_url() != "<unset>"),
 )
 
 
@@ -133,24 +132,18 @@ def persist_scan_state(scan_id: str, brain: BrainOrchestrator, target_url: str, 
         logger.warning("Attempted to persist scan state without user_id for scan_id=%s", scan_id)
         return False
 
-    persisted = scan_storage.upsert_scan(
+    session_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sess_{scan_id}"))
+    return scan_storage.persist_full_pipeline(
         scan_id=scan_id,
+        user_id=user_id,
         target_url=target_url,
         initial_plan=brain.serialize_initial_plan(),
         brain_status=brain.state.status.value,
+        session_id=session_id,
         results=brain.serialize_results(),
         final_report=brain.serialize_final_report(),
         remediations=brain.serialize_remediations(),
-        user_id=user_id,
     )
-    audit_result = brain.serialize_results().get("audit_engine") or {}
-    hunt_persisted = scan_storage.replace_hunt_findings(
-        scan_id=scan_id,
-        user_id=user_id,
-        vulnerabilities=audit_result.get("findings", []),
-        profiles=audit_result.get("profiles", []),
-    )
-    return persisted and hunt_persisted
 
 
 def extract_client_ip(request: Request) -> str | None:

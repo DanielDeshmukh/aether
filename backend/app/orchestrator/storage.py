@@ -652,20 +652,26 @@ class ScanStorage:
         success = True
 
         if vulnerabilities:
-            vulnerability_rows = [
-                {
-                    "id": vulnerability["id"],
+            vulnerability_rows = []
+            for v in vulnerabilities:
+                # Strict Validation: NEVER provide an ID; let DB generate UUID
+                if "id" in v:
+                    v.pop("id", None)
+                
+                vulnerability_rows.append({
                     "scan_id": resolved_scan_id,
-                    "category": vulnerability.get("category", "unknown"),
-                    "title": vulnerability.get("title", "Untitled Finding"),
-                    "severity": vulnerability.get("severity", "unknown"),
-                    "detail": vulnerability.get("detail", ""),
-                    "evidence": vulnerability.get("evidence", {}),
-                }
-                for vulnerability in vulnerabilities
-            ]
-            response = client.table(self.vulnerabilities_table).upsert(vulnerability_rows, on_conflict="id").execute()
-            success = success and getattr(response, "data", None) is not None
+                    "category": v.get("category", "unknown"),
+                    "title": v.get("title", "Untitled Finding"),
+                    "severity": v.get("severity", "unknown"),
+                    "detail": v.get("detail", ""),
+                    "evidence": v.get("evidence", {}),
+                })
+            
+            print(f"DEBUG: INSERTING VULNERABILITIES: {len(vulnerability_rows)}")
+            # Replace UPSERT with INSERT for deterministic UUID generation
+            response = client.table(self.vulnerabilities_table).insert(vulnerability_rows).execute()
+            if not response.data:
+                raise Exception(f"Vulnerability insert failed for scan {scan_id}")
 
         if profiles:
             profile_rows = [

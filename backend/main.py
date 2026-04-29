@@ -1,9 +1,6 @@
 import asyncio
 import base64
 import io
-from dotenv import load_dotenv
-
-load_dotenv() # Load environment variables at the very top
 import json
 import logging
 import os
@@ -11,22 +8,33 @@ import sys
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Union
 from urllib.parse import urlparse
 
-# Windows-specific fix for Playwright and asyncio subprocess handling
-if sys.platform == "win32":
-    import asyncio
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+# Third-party imports
+from dotenv import load_dotenv
+
+# Load environment variables before importing app modules that depend on them
+load_dotenv() 
+
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+# Windows-specific fix for Playwright and asyncio subprocess handling
+# This must remain near the top to ensure the event loop is configured early
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
+# Internal AETHER App Imports
+# Ensure your PYTHONPATH includes the 'backend' directory so 'app' is resolvable
 from app.orchestrator.brain import BrainBoundaryError, BrainOrchestrator, BrainStatus
 from app.services.storage import ScanStorage
 from app.api.deps import get_current_user
 from app.tools.validators import is_safe_url
+
+# Initialize Logger
 
 logger = logging.getLogger("aether.api")
 
@@ -128,6 +136,9 @@ def persist_scan_state(scan_id: str, brain: BrainOrchestrator, target_url: str, 
         logger.warning("Attempted to persist scan state without user_id for scan_id=%s", scan_id)
         return False
 
+    # Requirement: session_id MUST exist. Generate a deterministic ID for live telemetry updates.
+    session_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sess_{scan_id}"))
+
     persisted = scan_storage.upsert_scan(
         scan_id=scan_id,
         target_url=target_url,
@@ -144,6 +155,7 @@ def persist_scan_state(scan_id: str, brain: BrainOrchestrator, target_url: str, 
         user_id=user_id,
         vulnerabilities=audit_result.get("findings", []),
         profiles=audit_result.get("profiles", []),
+        session_id=session_id
     )
     return persisted and hunt_persisted
 
