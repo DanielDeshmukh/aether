@@ -11,11 +11,12 @@ from pathlib import Path
 from typing import Dict, List, Union
 from urllib.parse import urlparse
 
-# Third-party imports
 from dotenv import load_dotenv
 
-# Load environment variables before importing app modules that depend on them
-load_dotenv() 
+# Load env before importing internal app modules that read settings at import time.
+load_dotenv()
+
+# Third-party imports
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
