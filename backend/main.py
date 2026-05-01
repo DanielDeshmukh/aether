@@ -20,8 +20,10 @@ load_dotenv()
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
 
 # Windows-specific fix for Playwright and asyncio subprocess handling
 # This must remain near the top to ensure the event loop is configured early
@@ -32,12 +34,30 @@ if sys.platform == "win32":
 # Ensure your PYTHONPATH includes the 'backend' directory so 'app' is resolvable
 from app.orchestrator.brain import BrainBoundaryError, BrainOrchestrator, BrainStatus
 from app.services.storage import ScanStorage
-from app.api.deps import get_current_user
+from app.api.deps import check_scan_quota, get_current_user
 from app.tools.validators import is_safe_url
 
 # Initialize Logger
 
 logger = logging.getLogger("aether.api")
+
+
+def _rate_limit_key(request: Request) -> str:
+    user_email = request.headers.get("x-user-email", "").strip().lower()
+    if user_email:
+        return user_email
+    forwarded_for = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    if forwarded_for:
+        return forwarded_for
+    return request.client.host if request.client else "unknown-client"
+
+
+limiter = Limiter(key_func=_rate_limit_key, default_limits=["60/minute"])
+
+
+def _rate_limit_exception_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    # Keep rate-limit errors consistent with FastAPI HTTPException response shape.
+    return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
 
 
 class ScanCreateRequest(BaseModel):
@@ -61,6 +81,8 @@ def get_allowed_origins() -> List[str]:
 
 
 app = FastAPI(title="AETHER Engine API")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exception_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -80,6 +102,11 @@ logger.warning(
     scan_storage.configured(),
     scan_storage.using_service_role_key(),
 )
+
+
+@app.on_event("shutdown")
+async def shutdown_event() -> None:
+    scan_storage.close()
 
 
 def normalize_target(target_url: str) -> str:
@@ -114,12 +141,16 @@ def create_scan_record(target_url: str, user_id: str | None = None) -> dict:
         "target_url": target_url,
         "user_id": user_id,
     }
-    brain_sessions[scan_id] = BrainOrchestrator(scan_id=scan_id, target_url=target_url)
+    brain_sessions[scan_id] = BrainOrchestrator(scan_id=scan_id, target_url=target_url, user_identity=user_id)
     return {"scan_id": scan_id, "target_url": target_url}
 
 
 def hydrate_brain_from_record(scan_id: str, record: dict) -> BrainOrchestrator:
-    brain = BrainOrchestrator(scan_id=scan_id, target_url=record.get("target_url", ""))
+    brain = BrainOrchestrator(
+        scan_id=scan_id,
+        target_url=record.get("target_url", ""),
+        user_identity=record.get("user_id"),
+    )
     brain.execution_results = record.get("results") or {"port_scan": None, "header_audit": None, "audit_engine": None}
     brain.final_report = record.get("final_report") or {}
     brain.remediations = record.get("remediations") or {}
@@ -137,28 +168,19 @@ def persist_scan_state(scan_id: str, brain: BrainOrchestrator, target_url: str, 
         logger.warning("Attempted to persist scan state without user_id for scan_id=%s", scan_id)
         return False
 
-    # Requirement: session_id MUST exist. Generate a deterministic ID for live telemetry updates.
+    # Requirement: session_id MUST exist. Generate a deterministic ID for telemetry + persistence.
     session_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sess_{scan_id}"))
-
-    persisted = scan_storage.upsert_scan(
+    return scan_storage.persist_full_pipeline(
         scan_id=scan_id,
+        user_id=user_id,
         target_url=target_url,
         initial_plan=brain.serialize_initial_plan(),
         brain_status=brain.state.status.value,
+        session_id=session_id,
         results=brain.serialize_results(),
         final_report=brain.serialize_final_report(),
         remediations=brain.serialize_remediations(),
-        user_id=user_id,
     )
-    audit_result = brain.serialize_results().get("audit_engine") or {}
-    hunt_persisted = scan_storage.replace_hunt_findings(
-        scan_id=scan_id,
-        user_id=user_id,
-        vulnerabilities=audit_result.get("findings", []),
-        profiles=audit_result.get("profiles", []),
-        session_id=session_id
-    )
-    return persisted and hunt_persisted
 
 
 def extract_client_ip(request: Request) -> str | None:
@@ -438,10 +460,11 @@ async def api_healthcheck():
 @app.post("/api/v1/scans")
 @app.post("/api/v1/scan", include_in_schema=False)
 @app.post("/scan", include_in_schema=False)
+@limiter.limit("5/minute")
 async def create_scan(
     payload: ScanCreateRequest,
     request: Request,
-    user_id: str = Depends(get_current_user),
+    user_id: str = Depends(check_scan_quota),
 ):
     try:
         normalized_target = normalize_target(payload.target_url)
@@ -463,10 +486,12 @@ async def create_scan(
         logger.exception("Schema sync failed before consent logging.")
         raise HTTPException(status_code=503, detail="CONSENT LOGGING IS UNAVAILABLE. COMPLETE DATABASE SETUP AND RETRY.")
 
+    client_ip = extract_client_ip(request)
+
     consent_logged = scan_storage.log_consent(
         user_id=user_id,
         target_url=normalized_target,
-        ip_address=extract_client_ip(request),
+        origin_ip=client_ip,
     )
     if not consent_logged:
         raise HTTPException(status_code=503, detail="CONSENT COULD NOT BE PERSISTED. HUNT ABORTED.")
@@ -487,15 +512,45 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
 
     target_url = str(scan["target_url"])
     user_id = scan.get("user_id")
+    persistence_healthy = True
+
+    def try_persist(stage: str, allow_retry: bool = False) -> bool:
+        nonlocal persistence_healthy
+        if not user_id:
+            return False
+        if not persistence_healthy and not allow_retry:
+            return False
+        try:
+            persisted = persist_scan_state(scan_id, brain, target_url, user_id)
+            logger.info("%s scan persistence for %s: %s", stage, scan_id, persisted)
+            return persisted
+        except Exception:
+            persistence_healthy = False
+            logger.exception("%s scan persistence failed for %s", stage, scan_id)
+            return False
+
+    async def persist_and_emit_failure(message: str, phase: str) -> None:
+        brain.fail(message, phase=phase)
+        await safe_send_json(
+            websocket,
+            {
+                "type": "error",
+                "phase": phase,
+                "msg": message.upper(),
+                "brain": brain.state.snapshot(),
+                "results": brain.serialize_results(),
+                "final_report": brain.serialize_final_report(),
+            },
+        )
+        try_persist("Failure", allow_retry=True)
 
     try:
         await brain.ensure_initial_plan()
         try:
             scan_storage.ensure_schema()
-            persisted = persist_scan_state(scan_id, brain, target_url, user_id)
-            logger.info("Initial scan persistence for %s: %s", scan_id, persisted)
         except Exception:
-            logger.exception("Initial scan persistence failed for %s", scan_id)
+            logger.exception("Schema sync failed before initial persistence for %s", scan_id)
+        try_persist("Initial")
 
         await safe_send_json(
             websocket,
@@ -540,55 +595,24 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
                         }
                     )
 
-                    try:
-                        persisted = persist_scan_state(scan_id, brain, target_url, user_id)
-                        logger.info("Plan-stage scan persistence for %s: %s", scan_id, persisted)
-                    except Exception:
-                        logger.exception("Plan-stage scan persistence failed for %s", scan_id)
+                    try_persist("Plan-stage")
 
             if log["phase"] in {"execute", "analyze"}:
-                try:
-                    persisted = persist_scan_state(scan_id, brain, target_url, user_id)
-                    logger.info("%s-stage scan persistence for %s: %s", log["phase"].capitalize(), scan_id, persisted)
-                except Exception:
-                    logger.exception("%s-stage scan persistence failed for %s", log["phase"].capitalize(), scan_id)
+                try_persist(f"{log['phase'].capitalize()}-stage")
     except BrainBoundaryError as error:
-        brain.fail(error.message, phase=error.phase)
         logger.exception("Scan %s failed with a guarded runtime error", scan_id)
-        await safe_send_json(
-            websocket,
-            {
-                "type": "error",
-                "phase": error.phase,
-                "msg": error.message.upper(),
-                "brain": brain.state.snapshot(),
-                "results": brain.serialize_results(),
-                "final_report": brain.serialize_final_report(),
-            },
-        )
+        await persist_and_emit_failure(error.message, error.phase)
     except WebSocketDisconnect:
         if brain.state.status != BrainStatus.COMPLETE:
-            brain.terminate()
+            await persist_and_emit_failure("Websocket disconnected before scan completion.", "analyze")
     except Exception:
-        brain.fail("Unexpected orchestration failure. Review the backend logs and retry the scan.")
         logger.exception("Scan %s failed with an unexpected orchestration error", scan_id)
-        await safe_send_json(
-            websocket,
-            {
-                "type": "error",
-                "phase": "analyze",
-                "msg": "UNEXPECTED ORCHESTRATION FAILURE. REVIEW BACKEND LOGS AND RETRY THE SCAN.",
-                "brain": brain.state.snapshot(),
-                "results": brain.serialize_results(),
-                "final_report": brain.serialize_final_report(),
-            },
+        await persist_and_emit_failure(
+            "Unexpected orchestration failure. Review backend logs and retry the scan.",
+            "analyze",
         )
     finally:
-        try:
-            persisted = persist_scan_state(scan_id, brain, target_url, user_id)
-            logger.info("Final scan persistence for %s: %s", scan_id, persisted)
-        except Exception:
-            logger.exception("Final scan persistence failed for %s", scan_id)
+        try_persist("Final", allow_retry=True)
         active_scans.pop(scan_id, None)
         brain_sessions.pop(scan_id, None)
 

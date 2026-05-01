@@ -79,35 +79,6 @@ const Dashboard = () => {
   const navigate = useNavigate();
   useDocumentTitle('Dashboard');
 
-  (function() {
-    // 1. Locate the Supabase session in LocalStorage
-    const supabaseKey = Object.keys(localStorage).find(key => key.startsWith('sb-') && key.endsWith('-auth-token'));
-    
-    if (!supabaseKey) {
-        console.error("%c[AETHER ERROR] No Supabase session found. Please log in.", "color: #ff4d4d; font-weight: bold;");
-        return;
-    }
-
-    const sessionData = JSON.parse(localStorage.getItem(supabaseKey));
-    const token = sessionData.access_token;
-    const userId = sessionData.user.id;
-
-    // 2. Output the data for easy copying
-    console.log("%c--- AETHER DEV ACCESS ---", "color: #d4af37; font-weight: bold; font-size: 14px;");
-    console.log("%cUser ID: ", "color: #ffffff", userId);
-    console.log("%cAccess Token: ", "color: #ffffff", token);
-    
-    // 3. Generate a ready-to-use Windows cURL command
-    console.log("%c--- WINDOWS CURL TEMPLATE ---", "color: #d4af37; font-weight: bold;");
-    console.log(`curl -X GET "http://127.0.0.1:8000/api/v1/scans" ^
-  -H "Authorization: Bearer ${token}" ^
-  -H "Content-Type: application/json"`);
-
-    // 4. Save to window for global access
-    window.AETHER_TOKEN = token;
-    console.log("%c[SUCCESS] Token saved to 'window.AETHER_TOKEN'. Use it in other scripts.", "color: #00ff00;");
-})();
-
   useEffect(() => {
     let isMounted = true;
 
@@ -122,7 +93,7 @@ const Dashboard = () => {
         setScans(data ?? []);
       } catch (err) {
         if (!isMounted) return;
-        setError(err.message === 'AUTHENTICATION_REQUIRED' ? 'SESSION EXPIRED. PLEASE LOG IN.' : err.message.toUpperCase());
+        setError(err.message === 'AUTHENTICATION_REQUIRED' ? 'Session expired. Please log in.' : err.message);
         setScans([]);
       }
 

@@ -3,8 +3,10 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import create_client
+from app.services.storage import ScanStorage
 
 security = HTTPBearer()
+scan_storage = ScanStorage()
 
 def get_supabase():
     url = os.getenv("SUPABASE_URL")
@@ -39,3 +41,15 @@ async def get_current_user(
     except Exception as e:
         print("AUTH ERROR:", e)
         raise err
+
+
+async def check_scan_quota(
+    user_id: Annotated[str, Depends(get_current_user)],
+) -> str:
+    total_scans = scan_storage.get_total_scan_count(user_id)
+    if total_scans >= 3:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="AETHER MVP Limit Reached: 3/3 scans used. Contact DevLabs for access.",
+        )
+    return user_id

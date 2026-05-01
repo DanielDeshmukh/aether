@@ -45,7 +45,6 @@ const JoinUs = () => {
       },
     });
     if (error) console.error('Error sending magic link:', error);
-    else console.log('Magic link sent to:', email);
     setTimeout(() => setIsLoading(false), 2000); 
   };
 

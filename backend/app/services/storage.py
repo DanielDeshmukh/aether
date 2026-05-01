@@ -92,6 +92,11 @@ class ScanStorage:
             self._pool.open()
         return self._pool
 
+    def close(self) -> None:
+        if self._pool is not None:
+            self._pool.close()
+            self._pool = None
+
     @contextmanager
     def get_connection(self) -> Iterator[psycopg.Connection]:
         pool = self._get_pool()
@@ -155,6 +160,14 @@ class ScanStorage:
             return str(uuid.UUID(scan_id))
         except ValueError:
             return self.build_record_identifier(scan_id)
+
+    def _coerce_uuid(self, value: str | None) -> uuid.UUID | None:
+        if not value:
+            return None
+        try:
+            return uuid.UUID(str(value))
+        except (TypeError, ValueError):
+            return None
 
     def _scan_query(self, user_id: str, select_clause: str = "*") -> Any:
         raise NotImplementedError("Legacy Supabase query path has been disabled.")
@@ -347,6 +360,7 @@ class ScanStorage:
                     add column if not exists id uuid default gen_random_uuid(),
                     add column if not exists scan_id uuid,
                     add column if not exists user_id uuid,
+                    add column if not exists email text,
                     add column if not exists profile_type text,
                     add column if not exists label text,
                     add column if not exists summary text,
@@ -478,7 +492,7 @@ class ScanStorage:
             )
             flattened_values: List[Any] = []
             for row in chunk:
-                flattened_values.extend(row[column] for column in columns)
+                flattened_values.extend(row.get(column) for column in columns)
             cursor.execute(statement, flattened_values)
             inserted_count += len(chunk)
             self._logger.info(
@@ -586,11 +600,12 @@ class ScanStorage:
 
         resolved_scan_id = self.resolve_record_identifier(scan_id)
         normalized_session_id = str(uuid.UUID(str(session_id)))
-        normalized_user_id = str(uuid.UUID(str(user_id)))
+        normalized_user_id = str(user_id)
         normalized_scan_id = str(uuid.UUID(str(resolved_scan_id)))
         scan_uuid = uuid.UUID(normalized_scan_id)
         session_uuid = uuid.UUID(normalized_session_id)
-        user_uuid = uuid.UUID(normalized_user_id)
+        user_uuid = self._coerce_uuid(user_id)
+        profile_email = str(user_id)
         now_iso = datetime.now(timezone.utc).isoformat()
         normalized_initial_plan = initial_plan if isinstance(initial_plan, dict) else {"steps": []}
         scan_results = results or {}
@@ -615,6 +630,8 @@ class ScanStorage:
             "label": "Fallback Hunt Profile",
             "summary": "Generated to keep the persistence pipeline fully populated.",
             "details": {"source": "persist_full_pipeline_fallback", "generated_at": now_iso},
+            "email": profile_email,
+            "user_id": str(user_id),
         }]
 
         valid_vulnerability_rows, validation_errors = validate_and_build_rows(
@@ -656,6 +673,7 @@ class ScanStorage:
                     "id": uuid.UUID(profile_id),
                     "scan_id": scan_uuid,
                     "user_id": user_uuid,
+                    "email": str(profile.get("email") or profile.get("user_id") or profile_email),
                     "profile_type": str(profile.get("profile_type", "unknown")).strip() or "unknown",
                     "label": str(profile.get("label", "Untitled Profile")).strip() or "Untitled Profile",
                     "summary": str(profile.get("summary", "")).strip(),
@@ -746,7 +764,7 @@ class ScanStorage:
                             (scan_uuid,),
                         )
                         existing_scan_row = cursor.fetchone()
-                        if existing_scan_row and str(existing_scan_row[0]) != normalized_user_id:
+                        if existing_scan_row and user_uuid and str(existing_scan_row[0]) != str(user_uuid):
                             raise Exception(f"Cross-tenant violation for scan {scan_id}")
 
                         self.safe_insert(
@@ -785,8 +803,8 @@ class ScanStorage:
                             cursor,
                             self.profiles_table,
                             profile_db_rows,
-                            columns=["id", "scan_id", "user_id", "profile_type", "label", "summary", "details"],
-                            update_columns=["scan_id", "user_id", "profile_type", "label", "summary", "details"],
+                            columns=["id", "scan_id", "user_id", "email", "profile_type", "label", "summary", "details"],
+                            update_columns=["scan_id", "user_id", "email", "profile_type", "label", "summary", "details"],
                         )
                         self._logger.info("INSERTED: %s row(s) in %s", inserted_profiles, self.profiles_table)
 
@@ -987,12 +1005,38 @@ class ScanStorage:
     ) -> bool:
         raise NotImplementedError("Legacy upsert_scan path has been disabled. Use persist_full_pipeline().")
 
-    def log_consent(self, user_id: str, target_url: str, ip_address: str | None) -> bool:
+    def get_total_scan_count(self, user_id: str) -> int:
+        try:
+            with self.get_connection() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        select count(*)
+                        from public.scans
+                        where user_id = %s
+                        """,
+                        (uuid.UUID(str(user_id)),),
+                    )
+                    row = cursor.fetchone()
+                    return int(row[0]) if row else 0
+        except Exception as error:
+            from fastapi import HTTPException
+            self._logger.error("Scan count retrieval failed: %s", str(error))
+            raise HTTPException(status_code=500, detail="DATA_RETRIEVAL_FAILURE")
+
+    def log_consent(
+        self,
+        user_id: str,
+        target_url: str,
+        ip_address: str | None = None,
+        origin_ip: str | None = None,
+    ) -> bool:
+        persisted_ip = origin_ip if origin_ip is not None else ip_address
         payload = {
             "id": uuid.uuid5(uuid.NAMESPACE_URL, f"pre_scan_consent:{user_id}:{target_url}"),
             "user_id": uuid.UUID(str(user_id)),
             "target_url": target_url,
-            "ip_address": ip_address,
+            "ip_address": persisted_ip,
             "confirmed_at": datetime.now(timezone.utc).isoformat(),
         }
         with self.get_connection() as connection:

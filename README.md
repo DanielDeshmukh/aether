@@ -85,3 +85,14 @@ AETHER is structured as a modular SaaS platform:
 
 ---
 
+## Delivery Phases
+
+- [x] **Phase 12 - Hardening: Quota & Identity Guard**
+- [x] **Phase 13 - Hardening: Attack Surface Reduction**
+- [x] **Phase 14 - Final Audit & Launch**
+
+## Post-Launch Reliability
+
+- [x] Replaced legacy scan persistence path with transactional `persist_full_pipeline`.
+- [x] Hardened orchestration timeout handling for upstream AI overload scenarios.
+

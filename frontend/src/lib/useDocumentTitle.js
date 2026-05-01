@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-const APP_NAME = 'AETHER';
+const APP_NAME = 'DevLabs: AETHER';
 
 export const useDocumentTitle = (pageTitle) => {
   useEffect(() => {
