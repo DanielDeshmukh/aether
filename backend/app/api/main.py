@@ -1,8 +1,4 @@
-from dotenv import load_dotenv
-load_dotenv()
-
 from pathlib import Path
-
 import asyncio
 import base64
 import io
@@ -12,18 +8,16 @@ import os
 import sys
 import tempfile
 import uuid
-from pathlib import Path
 from typing import Dict, List
 from urllib.parse import urlparse
+from dotenv import load_dotenv
 
-logo_path = Path(r"D:\Vs Code\Aether\aether\frontend\public\images\logo.png")
-logo_uri = logo_path.as_uri()
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+
 # Windows-specific fix for Playwright and asyncio subprocess handling
 if sys.platform == "win32":
-    import asyncio
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -38,8 +32,6 @@ from app.services.git_integration_service import GitIntegrationService
 from app.services.storage import ScanStorage
 from app.api.deps import get_current_user
 from app.tools.validators import is_safe_url
-
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 logger = logging.getLogger("aether.api")
 
@@ -327,12 +319,15 @@ def generate_pdf_sync(temp_path: str) -> bytes:
 
 
 async def render_pdf_report(scan: dict, vulnerabilities: list[dict], profiles: list[dict]) -> bytes:
+    # Compute logo path relative to this file
+    current_dir = Path(__file__).resolve().parent
+    logo_path = (current_dir / ".." / ".." / ".." / "frontend" / "public" / "images" / "logo.png").resolve()
+    logo_uri = logo_path.as_uri() if logo_path.exists() else None
+
     # Load logo as base64
     logo_base64 = ""
     try:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        logo_path = os.path.join(current_dir, "..", "..", "..", "..", "frontend", "public", "images", "logo.png")
-        if os.path.exists(logo_path):
+        if logo_path.exists():
             with open(logo_path, "rb") as f:
                 logo_base64 = base64.b64encode(f.read()).decode()
     except Exception:
@@ -490,7 +485,7 @@ async def render_pdf_report(scan: dict, vulnerabilities: list[dict], profiles: l
 <body>
     <div class="header">
         <div class="logo-wrap">
-            <img src="{logo_uri}" class="logo-img" />
+            {"<img src='" + logo_uri + "' class='logo-img' />" if logo_uri else ""}
             <span class="brand">AETHER</span>
         </div>
         <div class="report-type">Mission Debrief</div>

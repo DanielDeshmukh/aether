@@ -58,7 +58,11 @@
 - `backend/app/services/` contains persistence, verification, monitoring, and integration services.
 - `backend/app/tools/` and `backend/app/engine/` contain lower-level scan and validation helpers.
 
+## Implemented Conventions
+
+- AETHER-Shield middleware and Intent-Router conventions are implemented in `backend/app/api/shield.py` and `backend/app/orchestrator/intent_router.py`.
+- The active persistence path follows the `ScanStorage` and `persist_full_pipeline` patterns in `backend/main.py`.
+
 ## Current Gaps To Respect
 
-- The codebase protocol mentions AETHER-Shield middleware and Intent-Router conventions, but those names are not yet represented as concrete modules in the current implementation.
 - There are parallel storage/auth paths in the backend; when documenting or extending behavior, treat `backend/main.py` plus `ScanStorage` as the main active path and call out legacy pieces explicitly.

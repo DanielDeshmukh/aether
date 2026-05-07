@@ -17,7 +17,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Third-party imports
-
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -35,14 +34,15 @@ if sys.platform == "win32":
 from app.api.aether_routes import router as aether_router
 from app.orchestrator.attack_orchestrator import AttackOrchestrator, GlobalAbort
 from app.orchestrator.brain import BrainBoundaryError, BrainOrchestrator, BrainStatus
+from app.orchestrator.intent_router import IntentRouter, ScanIntent
 from app.services.domain_verification import DomainVerificationManager
 from app.services.aether_storage import AetherStorage
 from app.services.storage import ScanStorage
 from app.api.deps import check_scan_quota, get_current_user
+from app.api.shield import AetherShieldMiddleware
 from app.tools.validators import is_safe_url
 
 # Initialize Logger
-
 logger = logging.getLogger("aether.api")
 
 
@@ -85,13 +85,11 @@ def get_allowed_origins() -> List[str]:
 
 
 app = FastAPI(title="AETHER Engine API")
-<<<<<<< HEAD
-app.include_router(aether_router)
-=======
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exception_handler)
->>>>>>> 40de2982ea0dc0326d7d04f6230c999cdce836db
+app.include_router(aether_router)
 
+app.add_middleware(AetherShieldMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_allowed_origins(),
@@ -104,6 +102,14 @@ active_scans: Dict[str, Dict[str, str | bool]] = {}
 brain_sessions: Dict[str, BrainOrchestrator] = {}
 scan_storage = ScanStorage()
 domain_verification_manager = DomainVerificationManager(scan_storage)
+
+# Intent-Router configuration
+allowed_validation_hosts = {
+    host.strip().lower()
+    for host in os.getenv("AETHER_VALIDATION_HOSTS", "localhost,127.0.0.1,::1").split(",")
+    if host.strip()
+}
+intent_router = IntentRouter(allowed_hosts=allowed_validation_hosts)
 
 logger.warning(
     "Supabase backend target: url=%s configured=%s service_role=%s",
@@ -202,10 +208,7 @@ def persist_scan_state(scan_id: str, brain: BrainOrchestrator, target_url: str, 
         logger.warning("Attempted to persist scan state without user_id for scan_id=%s", scan_id)
         return False
 
-<<<<<<< HEAD
-=======
     # Requirement: session_id MUST exist. Generate a deterministic ID for telemetry + persistence.
->>>>>>> 40de2982ea0dc0326d7d04f6230c999cdce836db
     session_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sess_{scan_id}"))
     return scan_storage.persist_full_pipeline(
         scan_id=scan_id,
@@ -218,7 +221,7 @@ def persist_scan_state(scan_id: str, brain: BrainOrchestrator, target_url: str, 
         final_report=brain.serialize_final_report(),
         remediations=brain.serialize_remediations(),
     )
-<<<<<<< HEAD
+
 
 def use_nvidia_orchestrator() -> bool:
     return os.getenv("AETHER_USE_NVIDIA_ORCHESTRATOR", "").strip().lower() in {"1", "true", "yes", "on"}
@@ -276,8 +279,6 @@ def build_nvidia_final_report(validation_result: dict, target_url: str) -> dict:
             f"captured {len(findings)} persisted finding(s)."
         ),
     }
-=======
->>>>>>> 40de2982ea0dc0326d7d04f6230c999cdce836db
 
 
 def extract_client_ip(request: Request) -> str | None:
@@ -609,14 +610,23 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
 
     target_url = str(scan["target_url"])
     user_id = scan.get("user_id")
-<<<<<<< HEAD
     resolved_scan_id = scan_storage.resolve_record_identifier(scan_id)
     resolved_session_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sess_{scan_id}"))
+
+    # Use Intent-Router to decide the path
     nvidia_mode = use_nvidia_orchestrator()
+    intent = ScanIntent(
+        target_url=target_url,
+        mode="active_validation" if nvidia_mode else "heuristic",
+        depth="deep" if nvidia_mode else "passive"
+    )
+    verdict = intent_router.route(intent)
+
+    # Re-align nvidia_mode based on intent verdict if auto-routing
+    nvidia_mode = (verdict.orchestrator == "attack_orchestrator")
+
     aether_storage = AetherStorage() if not nvidia_mode else None
 
-    try:
-=======
     persistence_healthy = True
 
     def try_persist(stage: str, allow_retry: bool = False) -> bool:
@@ -650,14 +660,6 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
         try_persist("Failure", allow_retry=True)
 
     try:
-        await brain.ensure_initial_plan()
-        try:
-            scan_storage.ensure_schema()
-        except Exception:
-            logger.exception("Schema sync failed before initial persistence for %s", scan_id)
-        try_persist("Initial")
-
->>>>>>> 40de2982ea0dc0326d7d04f6230c999cdce836db
         await safe_send_json(
             websocket,
             {
@@ -674,10 +676,9 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
         await brain.ensure_initial_plan()
         try:
             scan_storage.ensure_schema()
-            persisted = persist_scan_state(scan_id, brain, target_url, user_id)
-            logger.info("Initial scan persistence for %s: %s", scan_id, persisted)
         except Exception:
-            logger.exception("Initial scan persistence failed for %s", scan_id)
+            logger.exception("Schema sync failed before initial persistence for %s", scan_id)
+        try_persist("Initial")
 
         if nvidia_mode:
             if not user_id:
@@ -696,13 +697,6 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
                 }
             )
 
-            async def persist_with_log(stage_label: str) -> None:
-                try:
-                    persisted = persist_scan_state(scan_id, brain, target_url, user_id)
-                    logger.info("%s persistence for %s: %s", stage_label, scan_id, persisted)
-                except Exception:
-                    logger.exception("%s persistence failed for %s", stage_label, scan_id)
-
             async def on_stage_update(payload: dict) -> None:
                 if not active_scans.get(scan_id, {}).get("active"):
                     return
@@ -718,7 +712,7 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
                     }
                 )
                 if brain.state.phase in {"execute", "analyze"}:
-                    await persist_with_log(f"{brain.state.phase.capitalize()}-stage scan")
+                    try_persist(f"{brain.state.phase.capitalize()}-stage")
 
             async def on_finding_discovered(finding: dict) -> None:
                 if not active_scans.get(scan_id, {}).get("active"):
@@ -753,7 +747,7 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
                         "category": finding.get("category"),
                     }
                 )
-                await persist_with_log("Finding-stage scan")
+                try_persist("Finding-stage")
 
             orchestrator = AttackOrchestrator(
                 user_id=str(user_id),
@@ -799,7 +793,7 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
                         "final_report": brain.serialize_final_report(),
                     }
                 )
-                await persist_with_log("Final NVIDIA scan")
+                try_persist("Final NVIDIA")
         else:
             async for log in brain.stream(
                 user_id=str(user_id) if user_id else None,
@@ -820,7 +814,6 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
                     )
                     break
 
-<<<<<<< HEAD
                 await safe_send_json(websocket, log)
 
                 if log["phase"] == "plan" and brain.state.status == BrainStatus.PAUSED:
@@ -839,25 +832,10 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
                                 "brain": snapshot,
                             }
                         )
-
-                        try:
-                            persisted = persist_scan_state(scan_id, brain, target_url, user_id)
-                            logger.info("Plan-stage scan persistence for %s: %s", scan_id, persisted)
-                        except Exception:
-                            logger.exception("Plan-stage scan persistence failed for %s", scan_id)
+                        try_persist("Plan-stage")
 
                 if log["phase"] in {"execute", "analyze"}:
-                    try:
-                        persisted = persist_scan_state(scan_id, brain, target_url, user_id)
-                        logger.info("%s-stage scan persistence for %s: %s", log["phase"].capitalize(), scan_id, persisted)
-                    except Exception:
-                        logger.exception("%s-stage scan persistence failed for %s", log["phase"].capitalize(), scan_id)
-=======
-                    try_persist("Plan-stage")
-
-            if log["phase"] in {"execute", "analyze"}:
-                try_persist(f"{log['phase'].capitalize()}-stage")
->>>>>>> 40de2982ea0dc0326d7d04f6230c999cdce836db
+                    try_persist(f"{log['phase'].capitalize()}-stage")
     except BrainBoundaryError as error:
         logger.exception("Scan %s failed with a guarded runtime error", scan_id)
         await persist_and_emit_failure(error.message, error.phase)
