@@ -28,6 +28,7 @@ except ImportError:  # pragma: no cover - resolved when requirements are install
 
 from app.engine.playwright_driver import build_safety_headers, create_hardened_browser_context
 from app.engine.validation_lanes import ValidationLaneManager
+from app.engine.heuristic_engine import HeuristicEngine
 from app.orchestrator.remediation_agent import RemediationAgent
 from app.services.log_monitor import LogMonitor
 
@@ -560,8 +561,56 @@ class AttackOrchestrator:
         self._ensure_allowed_target(target_url)
         await self.log_monitor.mark_scan_start()
         trace = await self.nemotron_reasoning_stream(target_url)
-        await self._append_trace(trace, "plan", "Validation loop initialized.")
+        await self._append_trace(trace, "plan", "Attack Surface Orchestrator initialized.")
         await self._preflight_latency_check(target_url, trace)
+
+        # Deep heuristic pass as part of attack surface orchestration
+        await self._append_trace(trace, "observe", "Launching deep heuristic engine pass.")
+
+        async def heuristic_request_hook(url: str, method: str, headers: Dict[str, str] | None = None) -> httpx.Response:
+            self._check_abort()
+            await self._throttle_request()
+
+            combined_headers = {**self.safety_headers}
+            if headers:
+                combined_headers.update(headers)
+
+            started = time.monotonic()
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                if method.upper() == "GET":
+                    response = await client.get(url, headers=combined_headers)
+                elif method.upper() == "OPTIONS":
+                    response = await client.options(url, headers=combined_headers)
+                else:
+                    raise ValueError(f"Unsupported method in heuristic request hook: {method}")
+
+            latency_ms = int((time.monotonic() - started) * 1000)
+            await self.log_monitor.log_request(
+                request_url=url,
+                safety_token=combined_headers.get("X-Aether-Safety-Token", ""),
+                status="success" if 200 <= response.status_code < 400 else "blocked",
+                status_code=response.status_code,
+                latency_ms=latency_ms,
+                notes=f"heuristic_engine_{method.lower()}",
+            )
+            return response
+
+        heuristic_engine = HeuristicEngine(target_url, request_hook=heuristic_request_hook)
+        heuristic_results = await heuristic_engine.run_all()
+
+        for finding in heuristic_results.get("findings", []):
+            await self._insert_finding(
+                trace,
+                category=finding.get("category", "unknown"),
+                title=finding.get("title", "Untitled finding"),
+                severity=finding.get("severity", "info"),
+                detail=finding.get("detail", ""),
+                attack_vector=finding.get("attack_vector", "unspecified"),
+                evidence_snippet=finding.get("evidence_snippet", ""),
+                provided_solution=finding.get("provided_solution", "Apply standard hardening."),
+                evidence=finding.get("evidence"),
+            )
+
         tech_stack = await self._tech_stack_recon(target_url, trace)
         profile_rows = [
             {

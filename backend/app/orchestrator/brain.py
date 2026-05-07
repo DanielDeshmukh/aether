@@ -8,9 +8,10 @@ import uuid
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, AsyncIterator, Dict, List, Literal
+from typing import Any, AsyncIterator, Dict, List, Literal, Optional
 from urllib.parse import urlparse
 
+import httpx
 from pydantic import BaseModel, Field, ValidationError
 try:
     from playwright.async_api import TimeoutError as PlaywrightTimeoutError
@@ -19,7 +20,8 @@ except ImportError:  # pragma: no cover - resolved when requirements are install
     PlaywrightTimeoutError = Exception
     async_playwright = None
 
-from app.tools.audit_engine import audit_engine, format_audit_logs
+from app.tools.audit_engine import format_audit_logs
+from app.engine.heuristic_engine import HeuristicEngine
 from app.tools.headers import format_header_logs, header_audit
 from app.tools.remediation import find_vulnerability, generate_remediation
 from app.tools.scanner import format_port_logs, port_scan
@@ -107,8 +109,7 @@ async def analyze_tech_stack(target_url: str) -> Dict[str, Any]:
     except Exception as error:
         return {
             "target_url": target_url,
-            "frameworks": [],
-            "scripts": [],
+            "frameworks": [], "scripts": [],
             "headers": {},
             "error": f"Playwright tech stack analysis failed: {error}",
         }
@@ -298,10 +299,10 @@ Rules:
 
     def _fallback_verdict(self, results: Dict[str, Any]) -> FinalVerdict:
         port_scan_result = results.get("port_scan") or {}
-        header_result = results.get("header_audit") or {}
+        header_audit_result = results.get("header_audit") or {}
         audit_result = results.get("audit_engine") or {}
         open_ports = port_scan_result.get("open_ports", [])
-        findings = header_result.get("findings", [])
+        findings = header_audit_result.get("findings", [])
         hunt_findings = audit_result.get("findings", [])
 
         threat_level = "low"
@@ -391,6 +392,8 @@ Rules:
 
         try:
             client = genai.Client(api_key=self.api_key)
+            # Filter results to keep size manageable for LLM
+            lite_results = {k: v for k, v in results.items() if v is not None}
             response = self._generate_with_retry(
                 client,
                 contents=prompt,
@@ -748,7 +751,7 @@ class BrainOrchestrator:
             }
 
         try:
-            header_result = await asyncio.wait_for(header_audit(self.state.target_url), timeout=12)
+            header_audit_result = await asyncio.wait_for(header_audit(self.state.target_url), timeout=12)
         except asyncio.TimeoutError as error:
             raise BrainBoundaryError(
                 "Header audit timed out before response hardening could be evaluated.",
@@ -760,14 +763,14 @@ class BrainOrchestrator:
                 phase="execute",
             ) from error
 
-        if header_result.get("error"):
-            raise BrainBoundaryError(str(header_result["error"]), phase="execute")
-        self.execution_results["header_audit"] = header_result
+        if header_audit_result.get("error"):
+            raise BrainBoundaryError(str(header_audit_result["error"]), phase="execute")
+        self.execution_results["header_audit"] = header_audit_result
         self.append_thought("execute", "Header security review completed.")
         if storage and user_id and resolved_scan_id and resolved_session_id:
             await self._persist_trace(storage, user_id, resolved_scan_id, resolved_session_id)
 
-        for message in format_header_logs(header_result):
+        for message in format_header_logs(header_audit_result):
             yield {
                 "type": "execute",
                 "phase": "execute",
@@ -777,7 +780,8 @@ class BrainOrchestrator:
             }
 
         try:
-            audit_result = await asyncio.wait_for(audit_engine(self.state.target_url), timeout=14)
+            engine = HeuristicEngine(self.state.target_url)
+            audit_result = await asyncio.wait_for(engine.run_all(), timeout=30)
         except asyncio.TimeoutError as error:
             raise BrainBoundaryError(
                 "Audit engine timed out before vulnerability profiling could complete.",

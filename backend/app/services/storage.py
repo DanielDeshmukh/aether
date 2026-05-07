@@ -884,8 +884,6 @@ class ScanStorage:
             "label": "Fallback Hunt Profile",
             "summary": "Generated to keep the persistence pipeline fully populated.",
             "details": {"source": "persist_full_pipeline_fallback", "generated_at": now_iso},
-            "email": profile_email,
-            "user_id": str(user_id),
         }]
 
         valid_vulnerability_rows, validation_errors = validate_and_build_rows(
