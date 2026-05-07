@@ -250,7 +250,7 @@ Rules:
 
     def _generate_with_retry(self, client, contents, config, max_retries=5):
         """Generates content with model fallback and exponential backoff for transient errors."""
-        model_options = [self.model_name, "gemini-1.5-flash", "gemini-1.5-pro"]
+        model_options = [self.model_name, "gemini-2.5-flash-lite", "gemini-2.5-pro"]
         last_exception = None
 
         for model in model_options:
@@ -410,9 +410,10 @@ Rules:
 
 
 class BrainOrchestrator:
-    def __init__(self, scan_id: str, target_url: str):
+    def __init__(self, scan_id: str, target_url: str, user_identity: str | None = None):
         self.state = BrainState(scan_id=scan_id, target_url=target_url)
         self.hostname = urlparse(target_url).netloc.upper()
+        self.user_identity = user_identity
         self.plan_hold_triggered = False
         self.agent = PentestAgent()
         self.initial_plan: InitialPlan | None = None
@@ -428,11 +429,11 @@ class BrainOrchestrator:
             try:
                 self.initial_plan = await asyncio.wait_for(
                     asyncio.to_thread(self.agent.generate_initial_plan, self.state.target_url),
-                    timeout=self.agent.request_timeout_seconds,
+                    timeout=60,
                 )
             except asyncio.TimeoutError as error:
                 raise BrainBoundaryError(
-                    "Gemini planning timed out while preparing the strategy trace. Please retry the scan.",
+                    "Planning is taking longer than expected due to upstream AI load. Please retry in a moment.",
                     phase="observe",
                 ) from error
         return self.initial_plan
@@ -790,6 +791,23 @@ class BrainOrchestrator:
 
         if audit_result.get("error"):
             raise BrainBoundaryError(str(audit_result["error"]), phase="execute")
+        profiles = audit_result.get("profiles") or []
+        if not profiles:
+            profiles = [
+                {
+                    "profile_type": "security_operator",
+                    "label": "Fallback Hunt Profile",
+                    "summary": "Generated in orchestrator to preserve profile telemetry continuity.",
+                    "details": {"source": "brain_fallback_profile"},
+                    "email": self.user_identity,
+                    "user_id": self.user_identity,
+                }
+            ]
+        else:
+            for profile in profiles:
+                profile.setdefault("email", self.user_identity)
+                profile.setdefault("user_id", self.user_identity)
+        audit_result["profiles"] = profiles
         self.execution_results["audit_engine"] = audit_result
         self.append_thought("execute", "Bounded application audit completed.")
         if storage and user_id and resolved_scan_id and resolved_session_id:

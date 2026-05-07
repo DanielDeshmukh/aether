@@ -6,9 +6,14 @@ import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import create_client
+from app.services.storage import ScanStorage
 
 security = HTTPBearer()
+<<<<<<< HEAD
 logger = logging.getLogger("AETHER_BACKEND")
+=======
+scan_storage = ScanStorage()
+>>>>>>> 40de2982ea0dc0326d7d04f6230c999cdce836db
 
 def get_supabase():
     url = os.getenv("SUPABASE_URL")
@@ -45,6 +50,7 @@ async def get_current_user(
         raise err
 
 
+<<<<<<< HEAD
 async def get_verified_user_id(
     creds: Annotated[HTTPAuthorizationCredentials, Depends(security)],
 ) -> uuid.UUID:
@@ -72,3 +78,15 @@ async def get_verified_user_id(
     except Exception as exc:
         logger.error("AUTH_FAILURE: %s", str(exc))
         raise HTTPException(status_code=401, detail="Invalid Session") from exc
+=======
+async def check_scan_quota(
+    user_id: Annotated[str, Depends(get_current_user)],
+) -> str:
+    total_scans = scan_storage.get_total_scan_count(user_id)
+    if total_scans >= 3:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="AETHER MVP Limit Reached: 3/3 scans used. Contact DevLabs for access.",
+        )
+    return user_id
+>>>>>>> 40de2982ea0dc0326d7d04f6230c999cdce836db

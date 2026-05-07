@@ -8,10 +8,7 @@ export async function apiRequest(url, options = {}) {
   }
 
   const token = data.session.access_token;
-
-  console.log("TOKEN USED:", token?.slice(0, 20));
-
-  return fetch(`http://127.0.0.1:8000${url}`, {
+  const response = await fetch(`http://127.0.0.1:8000${url}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -19,4 +16,18 @@ export async function apiRequest(url, options = {}) {
       ...(options.headers || {}),
     },
   });
+
+  if (response.status === 403) {
+    throw new Error("Scan limit reached. You have used all 3 scans for this MVP account.");
+  }
+
+  if (response.status === 429) {
+    throw new Error("Too many requests right now. Please wait a minute and try again.");
+  }
+
+  if (!response.ok) {
+    throw new Error("Request failed. Please retry.");
+  }
+
+  return response;
 }
