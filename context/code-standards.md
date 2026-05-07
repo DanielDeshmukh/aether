@@ -2,52 +2,63 @@
 
 ## General
 
-- [Principle — e.g. Keep modules small and single-purpose]
-- [Principle — e.g. Fix root causes, do not layer workarounds]
-- [Principle — e.g. Do not mix unrelated concerns in one
-  component or route]
+- Keep the scan pipeline explicit: auth, consent, safety validation, orchestration, persistence, and reporting should stay readable as separate responsibilities.
+- Prefer defensive defaults. If a target, token, schema, or external AI dependency is missing, fail closed or degrade to a bounded fallback.
+- Fix the real boundary, not the symptom. Security checks belong at request and orchestration boundaries, not only in UI copy.
+- Preserve tenant isolation for every persisted scan artifact.
 
-## TypeScript
+## Python And FastAPI
 
-- [Rule — e.g. Strict mode is required throughout the project]
-- [Rule — e.g. Avoid any — use explicit interfaces or narrowly
-  scoped types]
-- [Rule — e.g. Validate unknown external input at system
-  boundaries before trusting it]
+- Validate request bodies with Pydantic models before running scan logic.
+- Keep route handlers thin; orchestration belongs in `app/orchestrator`, persistence in `app/services`, and low-level utilities in `app/tools` or `app/engine`.
+- Raise structured `HTTPException` values for user-facing failures and log the underlying cause on the server.
+- Long-running or staged scan work should stream over WebSockets instead of blocking a single synchronous request.
+- Security-sensitive helpers such as URL validation, quota checks, and verification checks should remain reusable and testable in isolation.
 
-## [Framework — e.g. Next.js]
+## React
 
-- [Convention — e.g. Default to server components]
-- [Convention — e.g. Add use client only when browser
-  interactivity requires it]
-- [Convention — e.g. Keep route handlers focused on a
-  single responsibility]
+- Pages own route composition; reusable UI and workflow primitives belong in `frontend/src/components`.
+- Network access that depends on Supabase auth should go through shared helpers like `apiRequest` or `buildWsUrl`.
+- State should stay local to the active workflow unless multiple screens truly share it.
+- Keep the authenticated UI aligned with the existing dark operator-console design system rather than introducing generic component-library patterns.
 
 ## Styling
 
-- [Rule — e.g. Use CSS custom property tokens — no
-  hardcoded hex values]
-- [Rule — e.g. Follow the border radius scale defined
-  in ui-context.md]
+- Reuse the existing root color tokens in `frontend/src/index.css` where possible.
+- Prefer the established `chamfer-panel`, `chamfer-button`, and `chamfer-badge` shapes for core operator surfaces.
+- Treat Lamborghini-style gold as the primary CTA accent, with green for live/success and red for hard failures.
+- Dashboard and debrief views must remain mobile-safe.
 
-## API Routes
+## API And WebSocket Contracts
 
-- [Rule — e.g. Validate and parse request input before
-  any logic runs]
-- [Rule — e.g. Enforce auth and ownership before any mutation]
-- [Rule — e.g. Return consistent, predictable response shapes]
+- Authenticated REST routes should expect Supabase bearer tokens and resolve the owning user before touching persisted resources.
+- Scan creation must enforce quota, consent confirmation, and SSRF safety before allocating engine work.
+- WebSocket payloads should keep predictable keys such as `type`, `phase`, `msg`, and `brain` so the console UI stays stable.
+- Persisted scan data must remain serializable to JSON because the frontend reads `initial_plan`, `results`, `final_report`, and `remediations` directly.
 
-## Data and Storage
+## Data And Storage
 
-- [Rule — e.g. Metadata belongs in the database]
-- [Rule — e.g. Large generated content belongs in file
-  or blob storage]
-- [Rule — e.g. Do not store large content directly in
-  the database]
+- `public.scans` is the canonical scan record used by dashboard and debrief screens.
+- `public.vulnerabilities`, `public.profiles`, `public.scan_sessions`, and `public.consent_logs` are supporting tables and should remain relationally consistent with the parent scan.
+- Use UUID normalization consistently when mapping frontend scan ids to database records.
+- Do not bypass ownership checks when fetching scans, findings, profiles, or remediation payloads.
+
+## Testing
+
+- Backend changes should extend the existing `backend/tests` suite around quota guards, safety gates, persistence, verification, and orchestration behavior.
+- Per repository protocol, every new backend function should be considered for unit coverage under `tests`.
+- High-risk areas are quota enforcement, SSRF validation, domain verification, persistence relations, and WebSocket failure handling.
 
 ## File Organization
 
-- `[folder]/` — [What belongs here]
-- `[folder]/` — [What belongs here]
-- `[folder]/` — [What belongs here]
-- `[folder]/` — [What belongs here]s
+- `frontend/src/pages/` contains route-level screens.
+- `frontend/src/components/` contains reusable UI and workflow components.
+- `frontend/src/lib/` contains frontend integration helpers such as API, WebSocket, and Supabase client setup.
+- `backend/app/orchestrator/` contains reasoning, execution, remediation, and agent loop logic.
+- `backend/app/services/` contains persistence, verification, monitoring, and integration services.
+- `backend/app/tools/` and `backend/app/engine/` contain lower-level scan and validation helpers.
+
+## Current Gaps To Respect
+
+- The codebase protocol mentions AETHER-Shield middleware and Intent-Router conventions, but those names are not yet represented as concrete modules in the current implementation.
+- There are parallel storage/auth paths in the backend; when documenting or extending behavior, treat `backend/main.py` plus `ScanStorage` as the main active path and call out legacy pieces explicitly.
