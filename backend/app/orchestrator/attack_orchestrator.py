@@ -566,17 +566,47 @@ class AttackOrchestrator:
 
         # Deep heuristic pass as part of attack surface orchestration
         await self._append_trace(trace, "observe", "Launching deep heuristic engine pass.")
-        heuristic_engine = HeuristicEngine(target_url)
+
+        async def heuristic_request_hook(url: str, method: str, headers: Dict[str, str] | None = None) -> httpx.Response:
+            self._check_abort()
+            await self._throttle_request()
+
+            combined_headers = {**self.safety_headers}
+            if headers:
+                combined_headers.update(headers)
+
+            started = time.monotonic()
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                if method.upper() == "GET":
+                    response = await client.get(url, headers=combined_headers)
+                elif method.upper() == "OPTIONS":
+                    response = await client.options(url, headers=combined_headers)
+                else:
+                    raise ValueError(f"Unsupported method in heuristic request hook: {method}")
+
+            latency_ms = int((time.monotonic() - started) * 1000)
+            await self.log_monitor.log_request(
+                request_url=url,
+                safety_token=combined_headers.get("X-Aether-Safety-Token", ""),
+                status="success" if 200 <= response.status_code < 400 else "blocked",
+                status_code=response.status_code,
+                latency_ms=latency_ms,
+                notes=f"heuristic_engine_{method.lower()}",
+            )
+            return response
+
+        heuristic_engine = HeuristicEngine(target_url, request_hook=heuristic_request_hook)
         heuristic_results = await heuristic_engine.run_all()
+
         for finding in heuristic_results.get("findings", []):
             await self._insert_finding(
                 trace,
-                category=finding["category"],
-                title=finding["title"],
-                severity=finding["severity"],
-                detail=finding["detail"],
-                attack_vector=finding["attack_vector"],
-                evidence_snippet=finding["evidence_snippet"],
+                category=finding.get("category", "unknown"),
+                title=finding.get("title", "Untitled finding"),
+                severity=finding.get("severity", "info"),
+                detail=finding.get("detail", ""),
+                attack_vector=finding.get("attack_vector", "unspecified"),
+                evidence_snippet=finding.get("evidence_snippet", ""),
                 provided_solution=finding.get("provided_solution", "Apply standard hardening."),
                 evidence=finding.get("evidence"),
             )

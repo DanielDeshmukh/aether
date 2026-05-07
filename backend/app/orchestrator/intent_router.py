@@ -1,5 +1,5 @@
 import logging
-from typing import Literal, Dict, Any
+from typing import Literal, Dict, Any, Iterable, Optional
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger("aether.intent_router")
@@ -19,8 +19,11 @@ class IntentRouter:
     Deterministic schema-based routing of scan intents.
     Determines the best orchestrator and configuration for a given scan intent.
     """
-    def __init__(self, allowed_hosts: set[str] | None = None):
-        self.allowed_hosts = allowed_hosts or {"localhost", "127.0.0.1"}
+    def __init__(self, allowed_hosts: Optional[Iterable[str]] = None):
+        if allowed_hosts is None:
+            self.allowed_hosts = {"localhost", "127.0.0.1"}
+        else:
+            self.allowed_hosts = {host.strip().lower() for host in allowed_hosts if host and host.strip()}
 
     def route(self, intent: ScanIntent) -> IntentRoutingVerdict:
         from urllib.parse import urlparse

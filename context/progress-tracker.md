@@ -26,33 +26,18 @@
 - Implemented `Intent-Router` for deterministic schema-based routing of scan intents.
 - Formalized `HeuristicEngine` with deep sensitive file and CORS checks.
 - Refactored `AttackOrchestrator` into a full Attack Surface Orchestrator.
+- Integrated `create_pull_request` in the remediation WebSocket handler.
 
 ## In Progress
 
-- End-to-end Git remediation PR flow. Frontend exposes the action, but the current remediation WebSocket handler does not yet process `create_pull_request`.
 - Documentation alignment so the context pack reflects the live repository instead of templates.
+- Frontend wiring for Git pull-request remediation actions.
 
 ## Next Up
 
-- Finish wiring Git pull-request remediation or remove the exposed frontend action until supported.
 - Audit dashboard and debrief responsiveness on smaller breakpoints per project definition of done.
 
 ## Open Questions
 
 - Should `AetherStorage` and `aether_routes.py` remain supported, or should the project standardize entirely on `ScanStorage` plus `backend/main.py`?
 - Is the NVIDIA orchestration path intended to be the default production path or a guarded experimental mode?
-- Should the frontend continue reading some records directly from Supabase while other actions go through FastAPI, or should all authenticated data access move behind the backend?
-- How should the AGENTS protocol requirements for AETHER-Shield and Intent-Router map onto the current implementation?
-
-## Architecture Decisions
-
-- The main persisted source of truth is `public.scans`, with supporting relational tables for sessions, vulnerabilities, profiles, and consent logs.
-- Scan execution is streamed over WebSockets so the operator can watch reasoning and react to plan-hold states without waiting for a blocking HTTP response.
-- Domain verification is enforced before active browser-based validation to reduce misuse risk.
-- The frontend keeps a dark luxury-console visual language built from custom React components and Tailwind, not a third-party component kit.
-
-## Session Notes
-
-- `MISSION_GOALS.md` describes the intended hardened-MVP direction and is broadly reflected in the current codebase.
-- The repo currently contains visible implementation mismatches, so future sessions should verify whether they are intended branches-in-progress or accidental unresolved conflicts before making backend changes.
-- Context docs were refreshed from current source code and should now be treated as status documentation, not blank templates.
