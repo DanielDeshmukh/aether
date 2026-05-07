@@ -30,7 +30,11 @@ if sys.platform == "win32":
 
 # Internal AETHER App Imports
 # Ensure your PYTHONPATH includes the 'backend' directory so 'app' is resolvable
+from app.api.aether_routes import router as aether_router
+from app.orchestrator.attack_orchestrator import AttackOrchestrator, GlobalAbort
 from app.orchestrator.brain import BrainBoundaryError, BrainOrchestrator, BrainStatus
+from app.services.domain_verification import DomainVerificationManager
+from app.services.aether_storage import AetherStorage
 from app.services.storage import ScanStorage
 from app.api.deps import get_current_user
 from app.tools.validators import is_safe_url
@@ -61,6 +65,7 @@ def get_allowed_origins() -> List[str]:
 
 
 app = FastAPI(title="AETHER Engine API")
+app.include_router(aether_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -73,6 +78,7 @@ app.add_middleware(
 active_scans: Dict[str, Dict[str, str | bool]] = {}
 brain_sessions: Dict[str, BrainOrchestrator] = {}
 scan_storage = ScanStorage()
+domain_verification_manager = DomainVerificationManager(scan_storage)
 
 logger.warning(
     "Supabase backend target: url=%s configured=%s service_role=%s",
@@ -132,33 +138,105 @@ async def safe_send_json(websocket: WebSocket, payload: dict) -> None:
     await websocket.send_json(payload)
 
 
+async def enforce_target_verification(
+    websocket: WebSocket,
+    brain: BrainOrchestrator,
+    target_url: str,
+    user_id: str | None,
+) -> bool:
+    verification = await domain_verification_manager.verify_target(target_url, user_id=user_id)
+    if verification.allowed:
+        return True
+
+    failure_message = verification.failure_message or "DOMAIN VERIFICATION FAILED."
+    brain.fail(failure_message, phase="observe")
+    await safe_send_json(
+        websocket,
+        {
+            "type": "error",
+            "phase": "observe",
+            "msg": failure_message,
+            "brain": brain.state.snapshot(),
+            "verification": verification.model_dump(),
+        },
+    )
+    return False
+
+
 def persist_scan_state(scan_id: str, brain: BrainOrchestrator, target_url: str, user_id: str | None) -> bool:
     if not user_id:
         logger.warning("Attempted to persist scan state without user_id for scan_id=%s", scan_id)
         return False
 
-    # Requirement: session_id MUST exist. Generate a deterministic ID for live telemetry updates.
     session_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sess_{scan_id}"))
-
-    persisted = scan_storage.upsert_scan(
+    return scan_storage.persist_full_pipeline(
         scan_id=scan_id,
+        user_id=user_id,
         target_url=target_url,
         initial_plan=brain.serialize_initial_plan(),
         brain_status=brain.state.status.value,
+        session_id=session_id,
         results=brain.serialize_results(),
         final_report=brain.serialize_final_report(),
         remediations=brain.serialize_remediations(),
-        user_id=user_id,
     )
-    audit_result = brain.serialize_results().get("audit_engine") or {}
-    hunt_persisted = scan_storage.replace_hunt_findings(
-        scan_id=scan_id,
-        user_id=user_id,
-        vulnerabilities=audit_result.get("findings", []),
-        profiles=audit_result.get("profiles", []),
-        session_id=session_id
-    )
-    return persisted and hunt_persisted
+
+def use_nvidia_orchestrator() -> bool:
+    return os.getenv("AETHER_USE_NVIDIA_ORCHESTRATOR", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def build_nvidia_final_report(validation_result: dict, target_url: str) -> dict:
+    findings = validation_result.get("findings", []) or []
+    remediation_map = validation_result.get("remediations", {}) or {}
+    severity_rank = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+    highest_severity = "low"
+    for finding in findings:
+        candidate = str(finding.get("severity", "low")).strip().lower()
+        if severity_rank.get(candidate, 0) > severity_rank[highest_severity]:
+            highest_severity = candidate
+
+    if validation_result.get("status") == "terminated":
+        return {
+            "threat_level": "critical",
+            "risk_impact": "The NVIDIA validation loop was terminated by the safety gate before full category coverage completed.",
+            "remediation_steps": [
+                "Review the streamed stage logs to confirm why the safety gate triggered.",
+                "Re-run the scan only after validating the allowlist and operator controls.",
+            ],
+            "synthesis": f"NVIDIA validation for {target_url} terminated early under the active safety controls.",
+        }
+
+    remediation_steps = [
+        remediation.get("summary")
+        for remediation in remediation_map.values()
+        if remediation.get("summary")
+    ][:4]
+    if not remediation_steps:
+        remediation_steps = [
+            finding.get("provided_solution")
+            for finding in findings
+            if finding.get("provided_solution")
+        ][:4]
+    if len(remediation_steps) < 2:
+        remediation_steps.extend(
+            [
+                "Review every confirmed signal against the local validation trace before applying production changes.",
+                "Patch the exposed control and rerun the NVIDIA-guided scan to confirm the fix holds.",
+            ][: 2 - len(remediation_steps)]
+        )
+
+    return {
+        "threat_level": highest_severity,
+        "risk_impact": (
+            f"The NVIDIA agentic validation loop completed against {target_url} and recorded "
+            f"{len(findings)} confirmed signal(s), with highest severity {highest_severity.upper()}."
+        ),
+        "remediation_steps": remediation_steps,
+        "synthesis": (
+            f"Nemotron-guided reasoning completed across the allowlisted OWASP validation lanes and "
+            f"captured {len(findings)} persisted finding(s)."
+        ),
+    }
 
 
 def extract_client_ip(request: Request) -> str | None:
@@ -487,16 +565,12 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
 
     target_url = str(scan["target_url"])
     user_id = scan.get("user_id")
+    resolved_scan_id = scan_storage.resolve_record_identifier(scan_id)
+    resolved_session_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sess_{scan_id}"))
+    nvidia_mode = use_nvidia_orchestrator()
+    aether_storage = AetherStorage() if not nvidia_mode else None
 
     try:
-        await brain.ensure_initial_plan()
-        try:
-            scan_storage.ensure_schema()
-            persisted = persist_scan_state(scan_id, brain, target_url, user_id)
-            logger.info("Initial scan persistence for %s: %s", scan_id, persisted)
-        except Exception:
-            logger.exception("Initial scan persistence failed for %s", scan_id)
-
         await safe_send_json(
             websocket,
             {
@@ -507,51 +581,189 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
             }
         )
 
-        async for log in brain.stream():
-            if not active_scans.get(scan_id, {}).get("active"):
-                brain.terminate()
+        if not await enforce_target_verification(websocket, brain, target_url, str(user_id) if user_id else None):
+            return
+
+        await brain.ensure_initial_plan()
+        try:
+            scan_storage.ensure_schema()
+            persisted = persist_scan_state(scan_id, brain, target_url, user_id)
+            logger.info("Initial scan persistence for %s: %s", scan_id, persisted)
+        except Exception:
+            logger.exception("Initial scan persistence failed for %s", scan_id)
+
+        if nvidia_mode:
+            if not user_id:
+                raise BrainBoundaryError(
+                    "NVIDIA orchestration requires authenticated user context for tenant-safe persistence.",
+                    phase="observe",
+                )
+
+            await safe_send_json(
+                websocket,
+                {
+                    "type": "thought",
+                    "phase": "plan",
+                    "msg": "PLAN: NVIDIA ORCHESTRATOR ENABLED. STREAMING AGENTIC REASONING LOOP.",
+                    "brain": brain.state.snapshot(),
+                }
+            )
+
+            async def persist_with_log(stage_label: str) -> None:
+                try:
+                    persisted = persist_scan_state(scan_id, brain, target_url, user_id)
+                    logger.info("%s persistence for %s: %s", stage_label, scan_id, persisted)
+                except Exception:
+                    logger.exception("%s persistence failed for %s", stage_label, scan_id)
+
+            async def on_stage_update(payload: dict) -> None:
+                if not active_scans.get(scan_id, {}).get("active"):
+                    return
+                brain.state.phase = payload.get("phase", brain.state.phase)
+                if payload.get("msg"):
+                    brain.append_thought(brain.state.phase, payload["msg"], category=payload.get("category"))
                 await safe_send_json(
                     websocket,
                     {
-                        "type": "error",
-                        "phase": "analyze",
-                        "msg": "SCAN TERMINATED BY OPERATOR.",
+                        **payload,
                         "brain": brain.state.snapshot(),
+                        "results": brain.serialize_results(),
                     }
                 )
-                break
+                if brain.state.phase in {"execute", "analyze"}:
+                    await persist_with_log(f"{brain.state.phase.capitalize()}-stage scan")
 
-            await safe_send_json(websocket, log)
+            async def on_finding_discovered(finding: dict) -> None:
+                if not active_scans.get(scan_id, {}).get("active"):
+                    return
+                remediation_payload = finding.get("remediation")
+                if remediation_payload and finding.get("id"):
+                    brain.remediations[str(finding["id"])] = remediation_payload
+                brain.state.phase = "remediate" if remediation_payload else "analyze"
+                await safe_send_json(
+                    websocket,
+                    {
+                        "type": "alert",
+                        "phase": "analyze",
+                        "msg": f"ACTIVE HIT: {str(finding.get('title', 'Untitled Finding')).upper()}",
+                        "brain": brain.state.snapshot(),
+                        "attack_vector": finding.get("attack_vector"),
+                        "severity": finding.get("severity"),
+                        "evidence_snippet": finding.get("evidence_snippet"),
+                        "provided_solution": finding.get("provided_solution"),
+                        "category": finding.get("category"),
+                    }
+                )
+                await safe_send_json(
+                    websocket,
+                    {
+                        "type": "remediation",
+                        "phase": "remediate",
+                        "msg": f"FIX THIS: {str(finding.get('title', 'Untitled Finding')).upper()}",
+                        "brain": brain.state.snapshot(),
+                        "provided_solution": finding.get("provided_solution"),
+                        "remediation": remediation_payload,
+                        "category": finding.get("category"),
+                    }
+                )
+                await persist_with_log("Finding-stage scan")
 
-            if log["phase"] == "plan" and brain.state.status == BrainStatus.PAUSED:
-                while brain.state.status == BrainStatus.PAUSED and active_scans.get(scan_id, {}).get("active"):
-                    signal = await websocket.receive_json()
-                    snapshot = brain.apply_signal(
-                        signal=signal.get("action", ""),
-                        reason=signal.get("reason"),
-                    )
+            orchestrator = AttackOrchestrator(
+                user_id=str(user_id),
+                scan_id=resolved_scan_id,
+                session_id=resolved_session_id,
+                storage_engine=None,
+                global_abort=GlobalAbort(
+                    is_triggered=lambda: not active_scans.get(scan_id, {}).get("active", False),
+                    reason=lambda: "SCAN_TERMINATED_BY_SAFETY_GATE",
+                ),
+                on_stage_update=on_stage_update,
+                on_finding_discovered=on_finding_discovered,
+                verification_service=domain_verification_manager,
+            )
+            validation_result = await orchestrator.run_validation_loop(target_url)
+            brain.execution_results["tech_stack"] = validation_result.get("tech_stack")
+            brain.execution_results["audit_engine"] = {
+                "target_url": target_url,
+                "findings": validation_result.get("findings", []),
+                "profiles": validation_result.get("profiles", []),
+                "trace": validation_result.get("trace", []),
+                "source": "nvidia_orchestrator",
+            }
+            brain.remediations.update(validation_result.get("remediations", {}))
+            brain.final_report = build_nvidia_final_report(validation_result, target_url)
+
+            if validation_result.get("status") == "terminated":
+                brain.terminate()
+            else:
+                brain.state.phase = "analyze"
+                brain.state.status = BrainStatus.COMPLETE
+                await safe_send_json(
+                    websocket,
+                    {
+                        "type": "analyze",
+                        "phase": "analyze",
+                        "msg": (
+                            f"ANALYZE: NVIDIA VALIDATION LOOP COMPLETE. "
+                            f"{len(validation_result.get('findings', []))} CONFIRMED SIGNAL(S) LOCKED."
+                        ),
+                        "brain": brain.state.snapshot(),
+                        "results": brain.serialize_results(),
+                        "final_report": brain.serialize_final_report(),
+                    }
+                )
+                await persist_with_log("Final NVIDIA scan")
+        else:
+            async for log in brain.stream(
+                user_id=str(user_id) if user_id else None,
+                resolved_scan_id=resolved_scan_id,
+                resolved_session_id=resolved_session_id,
+                storage=aether_storage,
+            ):
+                if not active_scans.get(scan_id, {}).get("active"):
+                    brain.terminate()
                     await safe_send_json(
                         websocket,
                         {
-                            "type": "plan",
-                            "phase": "plan",
-                            "msg": f"PLAN SIGNAL RECEIVED: {signal.get('action', '').upper() or 'UNKNOWN'}",
-                            "brain": snapshot,
+                            "type": "error",
+                            "phase": "analyze",
+                            "msg": "SCAN_TERMINATED_BY_SAFETY_GATE",
+                            "brain": brain.state.snapshot(),
                         }
                     )
+                    break
 
+                await safe_send_json(websocket, log)
+
+                if log["phase"] == "plan" and brain.state.status == BrainStatus.PAUSED:
+                    while brain.state.status == BrainStatus.PAUSED and active_scans.get(scan_id, {}).get("active"):
+                        signal = await websocket.receive_json()
+                        snapshot = brain.apply_signal(
+                            signal=signal.get("action", ""),
+                            reason=signal.get("reason"),
+                        )
+                        await safe_send_json(
+                            websocket,
+                            {
+                                "type": "plan",
+                                "phase": "plan",
+                                "msg": f"PLAN SIGNAL RECEIVED: {signal.get('action', '').upper() or 'UNKNOWN'}",
+                                "brain": snapshot,
+                            }
+                        )
+
+                        try:
+                            persisted = persist_scan_state(scan_id, brain, target_url, user_id)
+                            logger.info("Plan-stage scan persistence for %s: %s", scan_id, persisted)
+                        except Exception:
+                            logger.exception("Plan-stage scan persistence failed for %s", scan_id)
+
+                if log["phase"] in {"execute", "analyze"}:
                     try:
                         persisted = persist_scan_state(scan_id, brain, target_url, user_id)
-                        logger.info("Plan-stage scan persistence for %s: %s", scan_id, persisted)
+                        logger.info("%s-stage scan persistence for %s: %s", log["phase"].capitalize(), scan_id, persisted)
                     except Exception:
-                        logger.exception("Plan-stage scan persistence failed for %s", scan_id)
-
-            if log["phase"] in {"execute", "analyze"}:
-                try:
-                    persisted = persist_scan_state(scan_id, brain, target_url, user_id)
-                    logger.info("%s-stage scan persistence for %s: %s", log["phase"].capitalize(), scan_id, persisted)
-                except Exception:
-                    logger.exception("%s-stage scan persistence failed for %s", log["phase"].capitalize(), scan_id)
+                        logger.exception("%s-stage scan persistence failed for %s", log["phase"].capitalize(), scan_id)
     except BrainBoundaryError as error:
         brain.fail(error.message, phase=error.phase)
         logger.exception("Scan %s failed with a guarded runtime error", scan_id)

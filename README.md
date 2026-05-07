@@ -1,87 +1,87 @@
 # AETHER (Automated Ethical Testing & Heuristic Evaluation Routine)
 
 ## Welcome
-
-Welcome to the AETHER repository. This project represents an advanced approach to automated security testing, designed to move beyond conventional scanning tools and toward intelligent, adaptive penetration testing. AETHER is built to simulate the reasoning process of a human security expert while maintaining the scalability and consistency of modern SaaS systems.
+Welcome to the AETHER repository. This project is an advanced, autonomous penetration testing platform designed to simulate the reasoning of a human security expert. By moving beyond static rulesets, AETHER identifies, executes, and validates **OWASP Top 10** exploits against target URLs with high precision and professional rigor.
 
 ---
 
 ## Overview
+Traditional security scanners rely on predefined payloads, often resulting in high false positives. AETHER introduces an **Agentic Reasoning Loop**, enabling it to analyze and execute security tests in a context-aware, targeted manner.
 
-Traditional security scanners rely on predefined payloads and static rulesets, often resulting in high false positives and limited contextual understanding. AETHER introduces an **Agentic Reasoning Loop**, enabling it to analyze, plan, and execute security tests in a more informed and targeted manner.
-
-Instead of blindly executing scans, AETHER:
-- Observes application behavior
-- Identifies potential attack surfaces
-- Formulates hypotheses based on detected technologies
-- Executes context-aware exploits
-
-This approach allows the system to adapt dynamically to different architectures and frameworks, including modern stacks such as React, FastAPI, and PHP-based systems.
+Instead of blindly scanning, AETHER:
+*   **Observes:** Analyzes application behavior and tech stacks (React, FastAPI, PHP, etc.).
+*   **Identifies:** Maps the attack surface for vulnerabilities (SQLi, XSS, SSRF, etc.).
+*   **Executes:** Deploys context-aware exploits based on validated consent and ownership.
+*   **Validates:** Confirms successful breaches to eliminate false positives.
+*   **Remediates:** Provides professional code refactors and snippets to patch the flaw.
 
 ---
 
 ## Objectives
-
-The project is designed with the following core goals:
-
-- **Autonomous OWASP Coverage**  
-  Automate detection of vulnerabilities aligned with the OWASP Top 10, including emerging risks in agent-driven applications, while minimizing false positives.
-
-- **Scalable Security-as-a-Service**  
-  Provide a multi-tenant platform that enables organizations to schedule and manage continuous security audits.
-
-- **Comprehensive Reporting**  
-  Deliver detailed reports that include reproducible steps, root cause analysis, and actionable remediation guidance.
-
-- **Professional Application**  
-  Serve as a demonstrable platform for security consulting and enterprise-grade audit capabilities.
+*   **Autonomous OWASP Top 10 Execution**  
+    Full automation of the OWASP Top 10. If an attack is possible, AETHER executes it to prove the flaw's existence.
+*   **Mandatory Consent & Ownership**  
+    Rigid safety protocols ensuring scans only proceed after user-verified ownership and breach consent.
+*   **Intelligent Remediation**  
+    Moving beyond "finding" bugs to "fixing" them by providing actionable code snippets and root-cause explanations.
+*   **Scalable Security-as-a-Service**  
+    A multi-tenant architecture built for continuous, scalable security audits.
 
 ---
 
 ## System Architecture
-
-AETHER is structured as a modular SaaS platform:
+AETHER is structured as a modular SaaS platform designed for high-concurrency testing:
 
 | Layer | Technology Stack | Purpose |
-|------|----------------|--------|
-| Frontend | React.js (Dark Mode) | User interface for monitoring, control, and visualization of testing activities |
-| Orchestrator | LangGraph / Python | Central decision-making engine managing testing workflows |
-| Engine | FastAPI + Playwright | Execution layer simulating real user interactions and discovering attack vectors |
-| Intelligence | Gemini 1.5 Pro / Claude 3.5 | Responsible for payload generation and response interpretation |
-| Backend | Supabase | Handles authentication, data storage, and multi-tenant management |
+| :--- | :--- | :--- |
+| **Frontend** | React.js (Dark Mode) | Real-time visualization of attacks, telemetry, and vulnerability dashboards. |
+| **Orchestrator** | LangGraph / Python | The "Brain." Manages the stateful reasoning loop and attack planning. |
+| **Engine** | FastAPI + Playwright + Safety & Rate Limiting | The execution layer. Interacts with the DOM, delivers payloads, and enforces operational safety gates with request throttling and scan-identification headers. |
+| **Intelligence** | Gemini 2.0 Flash / Claude | Interprets HTTP responses and generates adaptive bypass payloads. |
+| **Backend** | Supabase / PostgreSQL | Manages auth, scan persistence, and the "Flaw & Remediation" database. |
 
 ---
 
 ## Core Features
-
-- **Threat Feed**  
-  Real-time visibility into ongoing testing activities and system interactions.
-
-- **Payload Customization**  
-  Allows advanced users to guide and refine attack strategies.
-
-- **Kill Switch Mechanism**  
-  Provides immediate termination of testing activity if instability is detected in the target system.
-
-- **Automated Remediation**  
-  Generates suggested fixes and pull requests for identified vulnerabilities.
+*   **The Threat Feed**  
+    A live stream of terminal-style logs showing active payload delivery and server responses.
+*   **OWASP Attack Modules**  
+    Specialized routines for Injection, Broken Access Control, Cryptographic Failures, and more.
+*   **Professional Remediation Engine**  
+    For every confirmed flaw, AETHER generates a technical report including "Current Vulnerable Code" vs. "Proposed Secure Refactor."
+*   **Kill Switch & Safety Gate**  
+    Immediate termination of all active sessions and automated rollback if target instability is detected or User's concern arise.
 
 ---
 
 ## Development Roadmap
 
-| Phase | Description | Status |
-|------|------------|--------|
-| Setup | Initialize repository, configure environments, and establish backend services | Complete |
-| Core Engine | Develop the FastAPI and Playwright-based interaction layer | In Progress |
-| Orchestrator (Brain) | Implement reasoning workflows using LangGraph | Pending |
-| AI Integration | Integrate large language models for intelligent payload generation | Pending |
-| Frontend (Dashboard) | Build the React-based monitoring and control interface | Pending |
-| Feature Layer | Implement advanced features such as Threat Feed and Kill Switch | Pending |
-| Reporting System | Develop structured reporting and export capabilities | Pending |
-| Auto-Remediation | Enable automated fix generation and pull request creation | Pending |
-| Testing | Conduct unit, integration, and real-world validation testing | Pending |
-| Deployment | Deploy infrastructure and configure CI/CD pipelines | Pending |
+### Completed
+
+| Milestone | Notes |
+| :--- | :--- |
+| **Setup** | Repository init, PostgreSQL schema foundation, and Supabase-backed auth wiring. |
+| **Database Persistence Resilience** | Stabilized the transactional `persist_full_pipeline` path and hardened scan/session/profile persistence. |
+| **Dynamic Profile Normalization** | Normalized profile payload generation so automated and user-linked profiles persist safely even with nullable identity fields. |
+| **NVIDIA Agentic Reasoning Loop Integration** | Bridged Nemotron-guided orchestration into the live WebSocket stream with tenant-safe persistence handoff. |
+| **Remediation Logic** | Added a typed remediation engine that turns validated findings into root-cause analysis and secure refactor packages. |
+
+### In Progress
+
+| Milestone | Notes |
+| :--- | :--- |
+| **Core Engine** | Continuing development of the FastAPI + Playwright interaction layer and bounded validation modules. |
+| **Headless Playwright Validation Lanes** | Refining the proof-of-concept exploit lanes into broader, repeatable validation coverage. |
+
+### Upcoming
+
+| Milestone | Notes |
+| :--- | :--- |
+| **Auto-Remediation** | Automated Pull Request generation for GitHub/GitLab repair workflows. |
+| **Deployment** | Hardened CI/CD pipelines and production-ready environment controls. |
+| **Hard-RAG Clinical Protocol (Project Ella)** | High-assurance retrieval and protocol orchestration for the clinical reasoning track. |
+| **Automated Ethical Auditing** | Continuous auditing of guardrails, consent flows, and operator safety boundaries. |
 
 ---
 
+> **Disclaimer:** AETHER is designed for ethical security testing. Use of this tool requires explicit, written consent from the target system owner. Unauthorized use is strictly prohibited.

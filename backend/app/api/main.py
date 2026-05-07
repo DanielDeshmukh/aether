@@ -29,7 +29,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from app.api.aether_routes import router as aether_router
+from app.orchestrator.attack_orchestrator import AttackOrchestrator, GlobalAbort
 from app.orchestrator.brain import BrainBoundaryError, BrainOrchestrator, BrainStatus
+from app.services.domain_verification import DomainVerificationManager
+from app.services.aether_storage import AetherStorage
+from app.services.git_integration_service import GitIntegrationService
 from app.services.storage import ScanStorage
 from app.api.deps import get_current_user
 from app.tools.validators import is_safe_url
@@ -57,6 +62,7 @@ def get_allowed_origins() -> List[str]:
 
 
 app = FastAPI(title="AETHER Engine API")
+app.include_router(aether_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -69,6 +75,8 @@ app.add_middleware(
 active_scans: Dict[str, Dict[str, str | bool]] = {}
 brain_sessions: Dict[str, BrainOrchestrator] = {}
 scan_storage = ScanStorage()
+domain_verification_manager = DomainVerificationManager(scan_storage)
+git_integration_service = GitIntegrationService(scan_storage)
 
 logger.warning(
     "PostgreSQL persistence target: database_configured=%s legacy_supabase_configured=%s",
@@ -127,6 +135,31 @@ async def safe_send_json(websocket: WebSocket, payload: dict) -> None:
     await websocket.send_json(payload)
 
 
+async def enforce_target_verification(
+    websocket: WebSocket,
+    brain: BrainOrchestrator,
+    target_url: str,
+    user_id: str | None,
+) -> bool:
+    verification = await domain_verification_manager.verify_target(target_url, user_id=user_id)
+    if verification.allowed:
+        return True
+
+    failure_message = verification.failure_message or "DOMAIN VERIFICATION FAILED."
+    brain.fail(failure_message, phase="observe")
+    await safe_send_json(
+        websocket,
+        {
+            "type": "error",
+            "phase": "observe",
+            "msg": failure_message,
+            "brain": brain.state.snapshot(),
+            "verification": verification.model_dump(),
+        },
+    )
+    return False
+
+
 def persist_scan_state(scan_id: str, brain: BrainOrchestrator, target_url: str, user_id: str | None) -> bool:
     if not user_id:
         logger.warning("Attempted to persist scan state without user_id for scan_id=%s", scan_id)
@@ -146,11 +179,120 @@ def persist_scan_state(scan_id: str, brain: BrainOrchestrator, target_url: str, 
     )
 
 
+def use_nvidia_orchestrator() -> bool:
+    return os.getenv("AETHER_USE_NVIDIA_ORCHESTRATOR", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def build_nvidia_final_report(validation_result: dict, target_url: str) -> dict:
+    findings = validation_result.get("findings", []) or []
+    remediation_map = validation_result.get("remediations", {}) or {}
+    severity_rank = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+    highest_severity = "low"
+    for finding in findings:
+        candidate = str(finding.get("severity", "low")).strip().lower()
+        if severity_rank.get(candidate, 0) > severity_rank[highest_severity]:
+            highest_severity = candidate
+
+    if validation_result.get("status") == "terminated":
+        return {
+            "threat_level": "critical",
+            "risk_impact": "The NVIDIA validation loop was terminated by the safety gate before full category coverage completed.",
+            "remediation_steps": [
+                "Review the streamed stage logs to confirm why the safety gate triggered.",
+                "Re-run the scan only after validating the allowlist and operator controls.",
+            ],
+            "synthesis": f"NVIDIA validation for {target_url} terminated early under the active safety controls.",
+        }
+
+    remediation_steps = [
+        remediation.get("summary")
+        for remediation in remediation_map.values()
+        if remediation.get("summary")
+    ][:4]
+    if not remediation_steps:
+        remediation_steps = [
+            finding.get("provided_solution")
+            for finding in findings
+            if finding.get("provided_solution")
+        ][:4]
+    if len(remediation_steps) < 2:
+        remediation_steps.extend(
+            [
+                "Review every confirmed signal against the local validation trace before applying production changes.",
+                "Patch the exposed control and rerun the NVIDIA-guided scan to confirm the fix holds.",
+            ][: 2 - len(remediation_steps)]
+        )
+
+    return {
+        "threat_level": highest_severity,
+        "risk_impact": (
+            f"The NVIDIA agentic validation loop completed against {target_url} and recorded "
+            f"{len(findings)} confirmed signal(s), with highest severity {highest_severity.upper()}."
+        ),
+        "remediation_steps": remediation_steps,
+        "synthesis": (
+            f"Nemotron-guided reasoning completed across the allowlisted OWASP validation lanes and "
+            f"captured {len(findings)} persisted finding(s)."
+        ),
+    }
+
+
+def attach_git_remediation_summary(final_report: dict, *, target_url: str, user_id: str | None, remediations: dict) -> dict:
+    enriched_report = dict(final_report or {})
+    enriched_report["auto_remediation"] = git_integration_service.build_git_summary(
+        target_url=target_url,
+        user_id=user_id,
+        has_remediations=bool(remediations),
+    )
+    return enriched_report
+
+
+def build_git_result_summary(pr_result: dict) -> dict:
+    return {
+        "provider": pr_result.get("provider"),
+        "target_id": pr_result.get("target_id"),
+        "repository": pr_result.get("repository"),
+        "branch": pr_result.get("branch"),
+        "base_branch": pr_result.get("base_branch"),
+        "pull_request_url": pr_result.get("pull_request_url"),
+        "pull_request_number": pr_result.get("pull_request_number"),
+    }
+
+
+def extract_screenshot_bytes(vulnerability: dict) -> bytes | None:
+    evidence = vulnerability.get("evidence") or {}
+    artifact = evidence.get("artifact") if isinstance(evidence, dict) else None
+    screenshot_base64 = artifact.get("screenshot_base64") if isinstance(artifact, dict) else None
+    if not screenshot_base64:
+        return None
+    try:
+        return base64.b64decode(screenshot_base64)
+    except Exception:
+        logger.exception("Failed to decode screenshot artifact for vulnerability %s", vulnerability.get("id"))
+        return None
+
+
 def extract_client_ip(request: Request) -> str | None:
     forwarded_for = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
     if forwarded_for:
         return forwarded_for
     return request.client.host if request.client else None
+
+
+def derive_public_api_base_url(websocket: WebSocket) -> str | None:
+    configured = (
+        os.getenv("AETHER_PUBLIC_API_URL", "").strip().rstrip("/")
+        or os.getenv("VITE_API_URL", "").strip().rstrip("/")
+    )
+    if configured:
+        return configured
+
+    forwarded_proto = websocket.headers.get("x-forwarded-proto")
+    scheme = forwarded_proto or ("https" if websocket.url.scheme == "wss" else "http")
+    host = websocket.headers.get("x-forwarded-host") or websocket.headers.get("host") or websocket.url.netloc
+    if not host:
+        return None
+    return f"{scheme}://{host}"
 
 
 def generate_pdf_sync(temp_path: str) -> bytes:
@@ -472,16 +614,12 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
 
     target_url = str(scan["target_url"])
     user_id = scan.get("user_id")
+    resolved_scan_id = scan_storage.resolve_record_identifier(scan_id)
+    resolved_session_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sess_{scan_id}"))
+    nvidia_mode = use_nvidia_orchestrator()
+    aether_storage = AetherStorage() if not nvidia_mode else None
 
     try:
-        await brain.ensure_initial_plan()
-        try:
-            scan_storage.ensure_schema()
-            persisted = persist_scan_state(scan_id, brain, target_url, user_id)
-            logger.info("Initial scan persistence for %s: %s", scan_id, persisted)
-        except Exception:
-            logger.exception("Initial scan persistence failed for %s", scan_id)
-
         await safe_send_json(
             websocket,
             {
@@ -492,51 +630,194 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
             }
         )
 
-        async for log in brain.stream():
-            if not active_scans.get(scan_id, {}).get("active"):
-                brain.terminate()
+        if not await enforce_target_verification(websocket, brain, target_url, str(user_id) if user_id else None):
+            return
+
+        await brain.ensure_initial_plan()
+        try:
+            scan_storage.ensure_schema()
+            persisted = persist_scan_state(scan_id, brain, target_url, user_id)
+            logger.info("Initial scan persistence for %s: %s", scan_id, persisted)
+        except Exception:
+            logger.exception("Initial scan persistence failed for %s", scan_id)
+
+        if nvidia_mode:
+            if not user_id:
+                raise BrainBoundaryError(
+                    "NVIDIA orchestration requires authenticated user context for tenant-safe persistence.",
+                    phase="observe",
+                )
+
+            await safe_send_json(
+                websocket,
+                {
+                    "type": "thought",
+                    "phase": "plan",
+                    "msg": "PLAN: NVIDIA ORCHESTRATOR ENABLED. STREAMING AGENTIC REASONING LOOP.",
+                    "brain": brain.state.snapshot(),
+                }
+            )
+
+            async def persist_with_log(stage_label: str) -> None:
+                try:
+                    persisted = persist_scan_state(scan_id, brain, target_url, user_id)
+                    logger.info("%s persistence for %s: %s", stage_label, scan_id, persisted)
+                except Exception:
+                    logger.exception("%s persistence failed for %s", stage_label, scan_id)
+
+            async def on_stage_update(payload: dict) -> None:
+                if not active_scans.get(scan_id, {}).get("active"):
+                    return
+                brain.state.phase = payload.get("phase", brain.state.phase)
+                if payload.get("msg"):
+                    brain.append_thought(brain.state.phase, payload["msg"], category=payload.get("category"))
                 await safe_send_json(
                     websocket,
                     {
-                        "type": "error",
-                        "phase": "analyze",
-                        "msg": "SCAN TERMINATED BY OPERATOR.",
+                        **payload,
                         "brain": brain.state.snapshot(),
+                        "results": brain.serialize_results(),
                     }
                 )
-                break
+                if brain.state.phase in {"execute", "analyze"}:
+                    await persist_with_log(f"{brain.state.phase.capitalize()}-stage scan")
 
-            await safe_send_json(websocket, log)
+            async def on_finding_discovered(finding: dict) -> None:
+                if not active_scans.get(scan_id, {}).get("active"):
+                    return
+                remediation_payload = finding.get("remediation")
+                if remediation_payload and finding.get("id"):
+                    brain.remediations[str(finding["id"])] = remediation_payload
+                brain.state.phase = "remediate" if remediation_payload else "analyze"
+                await safe_send_json(
+                    websocket,
+                    {
+                        "type": "alert",
+                        "phase": "analyze",
+                        "msg": f"ACTIVE HIT: {str(finding.get('title', 'Untitled Finding')).upper()}",
+                        "brain": brain.state.snapshot(),
+                        "attack_vector": finding.get("attack_vector"),
+                        "severity": finding.get("severity"),
+                        "evidence_snippet": finding.get("evidence_snippet"),
+                        "provided_solution": finding.get("provided_solution"),
+                        "category": finding.get("category"),
+                    }
+                )
+                await safe_send_json(
+                    websocket,
+                    {
+                        "type": "remediation",
+                        "phase": "remediate",
+                        "msg": f"FIX THIS: {str(finding.get('title', 'Untitled Finding')).upper()}",
+                        "brain": brain.state.snapshot(),
+                        "provided_solution": finding.get("provided_solution"),
+                        "remediation": remediation_payload,
+                        "category": finding.get("category"),
+                    }
+                )
+                await persist_with_log("Finding-stage scan")
 
-            if log["phase"] == "plan" and brain.state.status == BrainStatus.PAUSED:
-                while brain.state.status == BrainStatus.PAUSED and active_scans.get(scan_id, {}).get("active"):
-                    signal = await websocket.receive_json()
-                    snapshot = brain.apply_signal(
-                        signal=signal.get("action", ""),
-                        reason=signal.get("reason"),
-                    )
+            orchestrator = AttackOrchestrator(
+                user_id=str(user_id),
+                scan_id=resolved_scan_id,
+                session_id=resolved_session_id,
+                storage_engine=None,
+                global_abort=GlobalAbort(
+                    is_triggered=lambda: not active_scans.get(scan_id, {}).get("active", False),
+                    reason=lambda: "SCAN_TERMINATED_BY_SAFETY_GATE",
+                ),
+                on_stage_update=on_stage_update,
+                on_finding_discovered=on_finding_discovered,
+                verification_service=domain_verification_manager,
+            )
+            validation_result = await orchestrator.run_validation_loop(target_url)
+            brain.execution_results["tech_stack"] = validation_result.get("tech_stack")
+            brain.execution_results["audit_engine"] = {
+                "target_url": target_url,
+                "findings": validation_result.get("findings", []),
+                "profiles": validation_result.get("profiles", []),
+                "trace": validation_result.get("trace", []),
+                "source": "nvidia_orchestrator",
+            }
+            brain.remediations.update(validation_result.get("remediations", {}))
+            brain.final_report = attach_git_remediation_summary(
+                build_nvidia_final_report(validation_result, target_url),
+                target_url=target_url,
+                user_id=str(user_id) if user_id else None,
+                remediations=brain.serialize_remediations(),
+            )
+
+            if validation_result.get("status") == "terminated":
+                brain.terminate()
+            else:
+                brain.state.phase = "analyze"
+                brain.state.status = BrainStatus.COMPLETE
+                await safe_send_json(
+                    websocket,
+                    {
+                        "type": "analyze",
+                        "phase": "analyze",
+                        "msg": (
+                            f"ANALYZE: NVIDIA VALIDATION LOOP COMPLETE. "
+                            f"{len(validation_result.get('findings', []))} CONFIRMED SIGNAL(S) LOCKED."
+                        ),
+                        "brain": brain.state.snapshot(),
+                        "results": brain.serialize_results(),
+                        "final_report": brain.serialize_final_report(),
+                    }
+                )
+                await persist_with_log("Final NVIDIA scan")
+        else:
+            async for log in brain.stream(
+                user_id=str(user_id) if user_id else None,
+                resolved_scan_id=resolved_scan_id,
+                resolved_session_id=resolved_session_id,
+                storage=aether_storage,
+            ):
+                if not active_scans.get(scan_id, {}).get("active"):
+                    brain.terminate()
                     await safe_send_json(
                         websocket,
                         {
-                            "type": "plan",
-                            "phase": "plan",
-                            "msg": f"PLAN SIGNAL RECEIVED: {signal.get('action', '').upper() or 'UNKNOWN'}",
-                            "brain": snapshot,
+                            "type": "error",
+                            "phase": "analyze",
+                            "msg": "SCAN_TERMINATED_BY_SAFETY_GATE",
+                            "brain": brain.state.snapshot(),
                         }
                     )
+                    break
 
+                await safe_send_json(websocket, log)
+
+                if log["phase"] == "plan" and brain.state.status == BrainStatus.PAUSED:
+                    while brain.state.status == BrainStatus.PAUSED and active_scans.get(scan_id, {}).get("active"):
+                        signal = await websocket.receive_json()
+                        snapshot = brain.apply_signal(
+                            signal=signal.get("action", ""),
+                            reason=signal.get("reason"),
+                        )
+                        await safe_send_json(
+                            websocket,
+                            {
+                                "type": "plan",
+                                "phase": "plan",
+                                "msg": f"PLAN SIGNAL RECEIVED: {signal.get('action', '').upper() or 'UNKNOWN'}",
+                                "brain": snapshot,
+                            }
+                        )
+
+                        try:
+                            persisted = persist_scan_state(scan_id, brain, target_url, user_id)
+                            logger.info("Plan-stage scan persistence for %s: %s", scan_id, persisted)
+                        except Exception:
+                            logger.exception("Plan-stage scan persistence failed for %s", scan_id)
+
+                if log["phase"] in {"execute", "analyze"}:
                     try:
                         persisted = persist_scan_state(scan_id, brain, target_url, user_id)
-                        logger.info("Plan-stage scan persistence for %s: %s", scan_id, persisted)
+                        logger.info("%s-stage scan persistence for %s: %s", log["phase"].capitalize(), scan_id, persisted)
                     except Exception:
-                        logger.exception("Plan-stage scan persistence failed for %s", scan_id)
-
-            if log["phase"] in {"execute", "analyze"}:
-                try:
-                    persisted = persist_scan_state(scan_id, brain, target_url, user_id)
-                    logger.info("%s-stage scan persistence for %s: %s", log["phase"].capitalize(), scan_id, persisted)
-                except Exception:
-                    logger.exception("%s-stage scan persistence failed for %s", log["phase"].capitalize(), scan_id)
+                        logger.exception("%s-stage scan persistence failed for %s", log["phase"].capitalize(), scan_id)
     except BrainBoundaryError as error:
         brain.fail(error.message, phase=error.phase)
         logger.exception("Scan %s failed with a guarded runtime error", scan_id)
@@ -615,7 +896,33 @@ async def get_scan(scan_id: str, current_user: str = Depends(get_current_user)):
     if not record:
         raise HTTPException(status_code=404, detail="SCAN RECORD NOT FOUND.")
 
+    final_report = record.get("final_report") or {}
+    if "auto_remediation" not in final_report:
+        record["final_report"] = attach_git_remediation_summary(
+            final_report,
+            target_url=record.get("target_url", ""),
+            user_id=current_user,
+            remediations=record.get("remediations") or {},
+        )
     return record
+
+
+@app.get("/api/v1/scans/{scan_id}/vulnerabilities/{vuln_id}/evidence/screenshot")
+async def get_vulnerability_screenshot(scan_id: str, vuln_id: str, user_id: str = Depends(get_current_user)):
+    record = scan_storage.fetch_scan(scan_id=scan_id, user_id=user_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="SCAN RECORD NOT FOUND.")
+
+    vulnerabilities = scan_storage.fetch_vulnerabilities(scan_id=scan_id, user_id=user_id)
+    vulnerability = next((item for item in vulnerabilities if str(item.get("id")) == vuln_id), None)
+    if not vulnerability:
+        raise HTTPException(status_code=404, detail="VULNERABILITY NOT FOUND.")
+
+    screenshot_bytes = extract_screenshot_bytes(vulnerability)
+    if not screenshot_bytes:
+        raise HTTPException(status_code=404, detail="SCREENSHOT EVIDENCE NOT FOUND.")
+
+    return StreamingResponse(io.BytesIO(screenshot_bytes), media_type="image/png")
 
 
 @app.get("/api/v1/scans/{scan_id}/report")
@@ -671,24 +978,108 @@ async def websocket_remediation(websocket: WebSocket, scan_id: str):
         while True:
             payload = await websocket.receive_json()
             action = (payload.get("action") or "").strip().lower()
-            if action != "generate_fix":
-                await safe_send_json(websocket, {"type": "error", "phase": "remediate", "msg": "UNKNOWN REMEDIATION ACTION."})
+            if action == "generate_fix":
+                vuln_id = (payload.get("vuln_id") or "").strip()
+                remediation = await brain.generate_fix(vuln_id)
+                persisted = scan_storage.save_remediations(scan_id=scan_id, user_id=user_id, remediations=brain.serialize_remediations())
+                brain.final_report = attach_git_remediation_summary(
+                    brain.serialize_final_report(),
+                    target_url=record.get("target_url", ""),
+                    user_id=user_id,
+                    remediations=brain.serialize_remediations(),
+                )
+                scan_storage.save_final_report(scan_id=scan_id, user_id=user_id, final_report=brain.serialize_final_report())
+                await safe_send_json(
+                    websocket,
+                    {
+                        "type": "remediate",
+                        "phase": "remediate",
+                        "msg": f"REMEDIATE: FIX PACKAGE GENERATED FOR {vuln_id.upper() or 'UNKNOWN FINDING'}.",
+                        "remediation": remediation,
+                        "remediations": brain.serialize_remediations(),
+                        "final_report": brain.serialize_final_report(),
+                        "persisted": persisted,
+                    }
+                )
                 continue
 
-            vuln_id = (payload.get("vuln_id") or "").strip()
-            remediation = await brain.generate_fix(vuln_id)
-            persisted = scan_storage.save_remediations(scan_id=scan_id, user_id=user_id, remediations=brain.serialize_remediations())
-            await safe_send_json(
-                websocket,
-                {
-                    "type": "remediate",
-                    "phase": "remediate",
-                    "msg": f"REMEDIATE: FIX PACKAGE GENERATED FOR {vuln_id.upper() or 'UNKNOWN FINDING'}.",
-                    "remediation": remediation,
-                    "remediations": brain.serialize_remediations(),
-                    "persisted": persisted,
-                }
-            )
+            if action == "create_pull_request":
+                vuln_id = (payload.get("vuln_id") or "").strip()
+                target_id = (payload.get("target_id") or "").strip()
+                if not vuln_id:
+                    await safe_send_json(websocket, {"type": "error", "phase": "remediate", "msg": "VULNERABILITY ID IS REQUIRED FOR PULL REQUEST CREATION."})
+                    continue
+                if not target_id:
+                    await safe_send_json(websocket, {"type": "error", "phase": "remediate", "msg": "GIT TARGET ID IS REQUIRED FOR PULL REQUEST CREATION."})
+                    continue
+
+                vulnerabilities = scan_storage.fetch_vulnerabilities(scan_id=scan_id, user_id=user_id)
+                vulnerability = next((item for item in vulnerabilities if str(item.get("id")) == vuln_id), None)
+                remediation = brain.serialize_remediations().get(vuln_id)
+                if not vulnerability or not remediation:
+                    await safe_send_json(websocket, {"type": "error", "phase": "remediate", "msg": "GENERATE A REMEDIATION PACKAGE BEFORE OPENING A PULL REQUEST."})
+                    continue
+
+                await safe_send_json(
+                    websocket,
+                    {
+                        "type": "git_push_status",
+                        "phase": "remediate",
+                        "status": "pending",
+                        "msg": f"REMEDIATE: STAGING GIT REMEDIATION PR FOR {vuln_id.upper()}.",
+                    }
+                )
+                pr_payload = git_integration_service.build_pr_payload(
+                    scan_id=scan_id,
+                    target_url=record.get("target_url", ""),
+                    vulnerability=vulnerability,
+                    remediation_payload=remediation,
+                    public_api_base_url=derive_public_api_base_url(websocket),
+                )
+                try:
+                    pr_result = await asyncio.to_thread(
+                        git_integration_service.stage_remediation_pr,
+                        target_id,
+                        pr_payload,
+                        user_id,
+                    )
+                except Exception as error:
+                    await safe_send_json(
+                        websocket,
+                        {
+                            "type": "git_push_status",
+                            "phase": "remediate",
+                            "status": "error",
+                            "msg": f"GIT REMEDIATION PR FAILED: {str(error).upper()}",
+                        }
+                    )
+                    continue
+
+                brain.final_report = attach_git_remediation_summary(
+                    brain.serialize_final_report(),
+                    target_url=record.get("target_url", ""),
+                    user_id=user_id,
+                    remediations=brain.serialize_remediations(),
+                )
+                auto_remediation = dict(brain.serialize_final_report().get("auto_remediation") or {})
+                auto_remediation["last_pull_request"] = build_git_result_summary(pr_result)
+                brain.final_report["auto_remediation"] = auto_remediation
+                scan_storage.save_final_report(scan_id=scan_id, user_id=user_id, final_report=brain.serialize_final_report())
+                await safe_send_json(
+                    websocket,
+                    {
+                        "type": "git_push_status",
+                        "phase": "remediate",
+                        "status": "success",
+                        "msg": f"REMEDIATE: PULL REQUEST OPENED FOR {vuln_id.upper()}.",
+                        "git_result": build_git_result_summary(pr_result),
+                        "final_report": brain.serialize_final_report(),
+                    }
+                )
+                continue
+
+            else:
+                await safe_send_json(websocket, {"type": "error", "phase": "remediate", "msg": "UNKNOWN REMEDIATION ACTION."})
     except WebSocketDisconnect:
         return
     except Exception:

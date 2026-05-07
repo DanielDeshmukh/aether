@@ -236,7 +236,14 @@ class ScanStorage:
                     """
                     create table if not exists public.vulnerabilities (
                         id text primary key,
+                        user_id uuid,
                         scan_id uuid not null references public.scans(id) on delete cascade,
+                        session_id uuid,
+                        attack_vector text,
+                        detected_threat text,
+                        evidence_snippet text,
+                        provided_solution text,
+                        is_fixed boolean default false,
                         category text not null,
                         title text not null,
                         severity text not null,
@@ -302,10 +309,12 @@ class ScanStorage:
                     """
                     alter table public.vulnerabilities
                     add column if not exists id uuid default gen_random_uuid(),
+                    add column if not exists user_id uuid,
                     add column if not exists scan_id uuid,
                     add column if not exists session_id uuid,
                     add column if not exists attack_vector text,
                     add column if not exists detected_threat text,
+                    add column if not exists evidence_snippet text,
                     add column if not exists provided_solution text,
                     add column if not exists is_fixed boolean default false,
                     add column if not exists category text,

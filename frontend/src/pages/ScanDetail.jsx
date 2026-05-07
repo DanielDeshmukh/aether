@@ -93,9 +93,15 @@ const ScanDetail = () => {
   const planSteps = normalizePlan(scan?.initial_plan);
   const portScan = scan?.results?.port_scan;
   const headerAudit = scan?.results?.header_audit;
+  const auditEngine = scan?.results?.audit_engine;
   const remediations = scan?.remediations ?? {};
+  const findings = (auditEngine?.findings ?? []).length ? (auditEngine?.findings ?? []) : (headerAudit?.findings ?? []);
   const scanStatus = typeof scan?.status === 'string' ? scan.status.toUpperCase() : 'PENDING';
   const reportError = finalReport.error_message;
+  const autoRemediation = finalReport.auto_remediation ?? {};
+  const lastPullRequest = autoRemediation.last_pull_request;
+  const [loadingPrId, setLoadingPrId] = useState('');
+  const [gitPushStatus, setGitPushStatus] = useState('');
 
   const handleRemediate = async (vulnId) => {
     setLoadingFixId(vulnId);
@@ -121,6 +127,7 @@ const ScanDetail = () => {
       if (payload.remediation) {
         setScan((current) => ({
           ...current,
+          final_report: payload.final_report ?? current?.final_report,
           remediations: {
             ...(current?.remediations ?? {}),
             [vulnId]: payload.remediation,
@@ -134,6 +141,59 @@ const ScanDetail = () => {
     socket.onerror = () => {
       setRemediationError('REMEDIATION SOCKET FAILED BEFORE A FIX COULD BE RETURNED.');
       setLoadingFixId('');
+      socket.close();
+    };
+  };
+
+  const handleCreatePullRequest = async (vulnId) => {
+    if (!autoRemediation?.target_id) {
+      setRemediationError('NO GIT REMEDIATION TARGET IS CONFIGURED FOR THIS ASSET.');
+      return;
+    }
+
+    setLoadingPrId(vulnId);
+    setGitPushStatus('');
+    setRemediationError('');
+
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+
+    const socket = new WebSocket(buildWsUrl(`/ws/remediation/${scan.id}?user_id=${userId}`));
+
+    socket.onopen = () => {
+      socket.send(JSON.stringify({ action: 'create_pull_request', vuln_id: vulnId, target_id: autoRemediation.target_id }));
+    };
+
+    socket.onmessage = (event) => {
+      const payload = JSON.parse(event.data);
+      if (payload.type === 'error') {
+        setRemediationError(payload.msg ?? 'PULL REQUEST CREATION FAILED.');
+        setLoadingPrId('');
+        socket.close();
+        return;
+      }
+      if (payload.type === 'git_push_status') {
+        setGitPushStatus(payload.msg ?? '');
+        if (payload.status === 'success') {
+          setScan((current) => ({
+            ...current,
+            final_report: payload.final_report ?? current?.final_report,
+          }));
+          setLoadingPrId('');
+          socket.close();
+          return;
+        }
+        if (payload.status === 'error') {
+          setRemediationError(payload.msg ?? 'PULL REQUEST CREATION FAILED.');
+          setLoadingPrId('');
+          socket.close();
+        }
+      }
+    };
+
+    socket.onerror = () => {
+      setRemediationError('GIT REMEDIATION SOCKET FAILED BEFORE THE PULL REQUEST COULD BE OPENED.');
+      setLoadingPrId('');
       socket.close();
     };
   };
@@ -230,6 +290,11 @@ const ScanDetail = () => {
                       {remediationError}
                     </div>
                   )}
+                  {gitPushStatus && (
+                    <div className="mt-4 chamfer-panel border border-lambo-cyan/30 bg-lambo-cyan/10 px-4 py-3 text-[10px] font-bold tracking-[0.22em] text-lambo-cyan">
+                      {gitPushStatus}
+                    </div>
+                  )}
                   <div className="mt-5 space-y-4 text-[10px] tracking-[0.22em] text-lambo-ash">
                     <div className="chamfer-panel border border-white/5 bg-black/40 p-4">
                       <p className="font-bold text-lambo-gold">Port Scan</p>
@@ -243,25 +308,37 @@ const ScanDetail = () => {
                         Findings: {(headerAudit?.findings ?? []).length}
                       </p>
                     </div>
-                    {(headerAudit?.findings ?? []).map((finding) => {
+                    {findings.map((finding) => {
                       const remediation = remediations[finding.id];
                       return (
                         <div key={finding.id} className="chamfer-panel border border-white/5 bg-black/40 p-4">
                           <div className="flex items-start justify-between gap-4">
                             <div>
-                              <p className="font-bold text-lambo-gold">{finding.header}</p>
+                              <p className="font-bold text-lambo-gold">{finding.title ?? finding.header ?? 'Finding'}</p>
                               <p className="mt-2 text-[10px] uppercase leading-6 tracking-[0.16em] text-lambo-white">
-                                {finding.detail}
+                                {finding.detail ?? finding.detected_threat ?? 'No detail available.'}
                               </p>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => handleRemediate(finding.id)}
-                              disabled={loadingFixId === finding.id}
-                              className="chamfer-button border border-lambo-gold/30 bg-lambo-gold/10 px-4 py-3 text-[10px] font-bold tracking-[0.2em] text-lambo-gold disabled:opacity-50 hover:bg-lambo-gold/20 transition-colors"
-                            >
-                              {loadingFixId === finding.id ? 'Generating...' : 'Gemini Remediate'}
-                            </button>
+                            <div className="flex flex-col items-end gap-3">
+                              <button
+                                type="button"
+                                onClick={() => handleRemediate(finding.id)}
+                                disabled={loadingFixId === finding.id}
+                                className="chamfer-button border border-lambo-gold/30 bg-lambo-gold/10 px-4 py-3 text-[10px] font-bold tracking-[0.2em] text-lambo-gold disabled:opacity-50 hover:bg-lambo-gold/20 transition-colors"
+                              >
+                                {loadingFixId === finding.id ? 'Generating...' : 'Gemini Remediate'}
+                              </button>
+                              {remediation && autoRemediation?.pr_ready && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCreatePullRequest(finding.id)}
+                                  disabled={loadingPrId === finding.id}
+                                  className="chamfer-button border border-lambo-cyan/30 bg-lambo-cyan/10 px-4 py-3 text-[10px] font-bold tracking-[0.2em] text-lambo-cyan disabled:opacity-50 hover:bg-lambo-cyan/20 transition-colors"
+                                >
+                                  {loadingPrId === finding.id ? 'Opening PR...' : 'Create Pull Request'}
+                                </button>
+                              )}
+                            </div>
                           </div>
                           {loadingFixId === finding.id && !remediation && (
                             <div className="mt-4 chamfer-panel border border-lambo-gold/20 bg-lambo-gold/5 p-4">
@@ -300,6 +377,16 @@ const ScanDetail = () => {
                               <p className="text-[10px] uppercase leading-6 tracking-[0.16em] text-lambo-white">
                                 {remediation.summary}
                               </p>
+                              {lastPullRequest?.pull_request_url && (
+                                <a
+                                  href={lastPullRequest.pull_request_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center text-[10px] font-bold uppercase tracking-[0.22em] text-lambo-cyan hover:text-lambo-gold transition-colors"
+                                >
+                                  View Pull Request
+                                </a>
+                              )}
                               <div className="chamfer-panel border border-lambo-gold/30 bg-lambo-gold/10 p-[1px]">
                                 <div className="bg-lambo-charcoal p-4">
                                   <div className="mb-3 text-[10px] font-bold uppercase tracking-[0.28em] text-lambo-gold">

@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import logging
 from contextlib import contextmanager
 from typing import Any, Dict, Iterable, Iterator, List
+from urllib.parse import urlparse
 
 import psycopg
 import requests
@@ -183,6 +184,182 @@ class ScanStorage:
                 row = cursor.fetchone()
         return bool(row) and row[0] != normalized_user_id
 
+    def _get_table_column_names(self, table_name: str) -> set[str]:
+        with self.get_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select column_name
+                    from information_schema.columns
+                    where table_schema = 'public' and table_name = %s
+                    """,
+                    (table_name,),
+                )
+                return {row[0] for row in cursor.fetchall()}
+
+    def fetch_target_verification_record(self, domain: str, user_id: str | None = None) -> Dict[str, Any] | None:
+        columns = self._get_table_column_names("targets")
+        if not columns:
+            return None
+
+        def first_present(*candidates: str) -> str | None:
+            for candidate in candidates:
+                if candidate in columns:
+                    return candidate
+            return None
+
+        domain_column = first_present("domain", "target_domain", "hostname")
+        verified_column = first_present("is_verified", "verified")
+        if domain_column is None or verified_column is None:
+            return None
+
+        selected_columns = [
+            (domain_column, "domain"),
+            (verified_column, "is_verified"),
+        ]
+
+        optional_column_map = {
+            "verification_token": (
+                "verification_token",
+                "dns_token",
+                "txt_token",
+                "verification_txt_token",
+                "http_token",
+                "well_known_token",
+            ),
+            "dns_record": ("dns_record", "verification_record", "txt_record"),
+            "http_path": ("http_path", "verification_path", "well_known_path"),
+            "http_token": ("http_token", "verification_file_token", "well_known_token"),
+        }
+        for alias, candidates in optional_column_map.items():
+            actual_column = first_present(*candidates)
+            if actual_column is not None:
+                selected_columns.append((actual_column, alias))
+
+        user_column = first_present("user_id", "owner_id")
+        order_column = first_present("updated_at", "created_at")
+
+        statement = sql.SQL(
+            "select {columns} from {table} where {domain_column} = %s{user_filter}{order_clause} limit 1"
+        ).format(
+            columns=sql.SQL(", ").join(
+                sql.SQL("{column} as {alias}").format(
+                    column=sql.Identifier(actual_column),
+                    alias=sql.Identifier(alias),
+                )
+                for actual_column, alias in selected_columns
+            ),
+            table=sql.Identifier("public", "targets"),
+            domain_column=sql.Identifier(domain_column),
+            user_filter=sql.SQL(f" and {user_column} = %s") if user_column and user_id else sql.SQL(""),
+            order_clause=sql.SQL(f" order by {order_column} desc") if order_column else sql.SQL(""),
+        )
+
+        params: list[Any] = [domain]
+        if user_column and user_id:
+            try:
+                params.append(uuid.UUID(str(user_id)))
+            except (ValueError, TypeError, AttributeError):
+                params.append(str(user_id))
+
+        with self.get_connection() as connection:
+            with connection.cursor(row_factory=psycopg.rows.dict_row) as cursor:
+                cursor.execute(statement, params)
+                return cursor.fetchone()
+
+    def _first_present(self, columns: set[str], *candidates: str) -> str | None:
+        for candidate in candidates:
+            if candidate in columns:
+                return candidate
+        return None
+
+    def _normalize_git_target(self, row: Dict[str, Any], columns: set[str]) -> Dict[str, Any]:
+        details = row.get("details")
+        details = details if isinstance(details, dict) else {}
+
+        def pick(*keys: str) -> Any:
+            for key in keys:
+                if key in row and row.get(key) not in (None, ""):
+                    return row.get(key)
+                if key in details and details.get(key) not in (None, ""):
+                    return details.get(key)
+            return None
+
+        return {
+            "id": row.get("id"),
+            "provider": pick("git_provider", "provider"),
+            "repository": pick("repository", "repo_name", "full_name", "project_path"),
+            "project_id": pick("project_id", "gitlab_project_id"),
+            "access_token": pick("access_token", "git_access_token", "token"),
+            "default_branch": pick("default_branch", "branch"),
+            "base_branch": pick("base_branch", "default_branch", "branch"),
+            "api_base_url": pick("api_base_url", "git_api_base_url"),
+            "repo_web_url": pick("repo_web_url", "repository_url", "html_url", "web_url"),
+            "target_url": pick("target_url"),
+            "domain": pick("domain", "target_domain", "hostname"),
+        }
+
+    def _fetch_target_row(self, filters: Dict[str, Any], user_id: str | None) -> Dict[str, Any] | None:
+        columns = self._get_table_column_names("targets")
+        if not columns:
+            return None
+
+        selected_columns = [
+            column
+            for column in {
+                "id",
+                self._first_present(columns, "provider", "git_provider"),
+                self._first_present(columns, "repository", "repo_name", "full_name", "project_path"),
+                self._first_present(columns, "project_id", "gitlab_project_id"),
+                self._first_present(columns, "access_token", "git_access_token", "token"),
+                self._first_present(columns, "default_branch", "branch"),
+                self._first_present(columns, "base_branch"),
+                self._first_present(columns, "api_base_url", "git_api_base_url"),
+                self._first_present(columns, "repo_web_url", "repository_url", "html_url", "web_url"),
+                self._first_present(columns, "target_url"),
+                self._first_present(columns, "domain", "target_domain", "hostname"),
+                self._first_present(columns, "details"),
+            }
+            if column
+        ]
+        if "id" not in selected_columns:
+            return None
+
+        where_clauses: list[sql.Composed] = []
+        params: list[Any] = []
+        for column_name, value in filters.items():
+            if column_name not in columns or value in (None, ""):
+                continue
+            where_clauses.append(sql.SQL("{} = %s").format(sql.Identifier(column_name)))
+            params.append(value)
+
+        user_column = self._first_present(columns, "user_id", "owner_id")
+        if user_column and user_id:
+            where_clauses.append(sql.SQL("{} = %s").format(sql.Identifier(user_column)))
+            try:
+                params.append(uuid.UUID(str(user_id)))
+            except (TypeError, ValueError, AttributeError):
+                params.append(str(user_id))
+
+        if not where_clauses:
+            return None
+
+        order_column = self._first_present(columns, "updated_at", "created_at")
+        statement = sql.SQL(
+            "select {columns} from {table} where {filters}{order_clause} limit 1"
+        ).format(
+            columns=sql.SQL(", ").join(sql.Identifier(column) for column in selected_columns),
+            table=sql.Identifier("public", "targets"),
+            filters=sql.SQL(" and ").join(where_clauses),
+            order_clause=sql.SQL(" order by {} desc").format(sql.Identifier(order_column)) if order_column else sql.SQL(""),
+        )
+
+        with self.get_connection() as connection:
+            with connection.cursor(row_factory=psycopg.rows.dict_row) as cursor:
+                cursor.execute(statement, params)
+                row = cursor.fetchone()
+        return self._normalize_git_target(row, columns) if row else None
+
     def normalize_status(self, brain_status: str) -> str:
         normalized = (brain_status or "").strip().lower()
         if normalized == "paused":
@@ -259,7 +436,14 @@ class ScanStorage:
                     """
                     create table if not exists public.vulnerabilities (
                         id text primary key,
+                        user_id uuid,
                         scan_id uuid not null references public.scans(id) on delete cascade,
+                        session_id uuid,
+                        attack_vector text,
+                        detected_threat text,
+                        evidence_snippet text,
+                        provided_solution text,
+                        is_fixed boolean default false,
                         category text not null,
                         title text not null,
                         severity text not null,
@@ -275,6 +459,7 @@ class ScanStorage:
                         id uuid primary key default gen_random_uuid(),
                         scan_id uuid not null references public.scans(id) on delete cascade,
                         user_id uuid,
+                        email text,
                         profile_type text not null,
                         label text not null,
                         summary text not null,
@@ -327,10 +512,12 @@ class ScanStorage:
                     """
                     alter table public.vulnerabilities
                     add column if not exists id text,
+                    add column if not exists user_id uuid,
                     add column if not exists scan_id uuid,
                     add column if not exists session_id uuid,
                     add column if not exists attack_vector text,
                     add column if not exists detected_threat text,
+                    add column if not exists evidence_snippet text,
                     add column if not exists provided_solution text,
                     add column if not exists is_fixed boolean default false,
                     add column if not exists category text,
@@ -347,6 +534,7 @@ class ScanStorage:
                     add column if not exists id uuid default gen_random_uuid(),
                     add column if not exists scan_id uuid,
                     add column if not exists user_id uuid,
+                    add column if not exists email text,
                     add column if not exists profile_type text,
                     add column if not exists label text,
                     add column if not exists summary text,
@@ -557,6 +745,71 @@ class ScanStorage:
         self._logger.info("SUCCESS: verified %s row(s) in %s", verified_count, table)
         return verified_count
 
+    def _normalize_optional_profile_email(self, value: Any) -> str | None:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
+
+    def _normalize_optional_profile_user_id(
+        self,
+        value: Any,
+        fallback_user_id: uuid.UUID | None,
+    ) -> uuid.UUID | None:
+        if value in (None, ""):
+            return fallback_user_id
+        try:
+            return uuid.UUID(str(value))
+        except (TypeError, ValueError, AttributeError):
+            self._logger.warning("PROFILE_USER_ID_INVALID: %s", value)
+            return fallback_user_id
+
+    def _build_profile_row(
+        self,
+        profile: Any,
+        *,
+        index: int,
+        normalized_scan_id: str,
+        normalized_session_id: str,
+        scan_uuid: uuid.UUID,
+        fallback_user_id: uuid.UUID | None,
+        now_iso: str,
+    ) -> Dict[str, Any]:
+        raw_profile = profile if isinstance(profile, dict) else {}
+        profile_type = str(raw_profile.get("profile_type", "unknown")).strip() or "unknown"
+        label = str(raw_profile.get("label", "Untitled Profile")).strip() or "Untitled Profile"
+        summary = str(raw_profile.get("summary", "")).strip()
+        details = raw_profile.get("details")
+        normalized_details = details if isinstance(details, dict) else {}
+        normalized_email = self._normalize_optional_profile_email(raw_profile.get("email"))
+        normalized_user_id = self._normalize_optional_profile_user_id(
+            raw_profile.get("user_id"),
+            fallback_user_id,
+        )
+
+        profile_id = str(
+            uuid.uuid5(
+                uuid.NAMESPACE_URL,
+                f"profile:{normalized_scan_id}:{normalized_session_id}:{index}:{profile_type}:{label}",
+            )
+        )
+        uuid.UUID(profile_id)
+
+        return {
+            "id": uuid.UUID(profile_id),
+            "scan_id": scan_uuid,
+            "user_id": normalized_user_id,
+            "email": normalized_email,
+            "profile_type": profile_type,
+            "label": label,
+            "summary": summary,
+            "details": {
+                **normalized_details,
+                "source": normalized_details.get("source", "persist_full_pipeline"),
+                "generated_at": normalized_details.get("generated_at", now_iso),
+            },
+        }
+
     def persist_full_pipeline(
         self,
         scan_id: str,
@@ -611,6 +864,8 @@ class ScanStorage:
             "provided_solution": "Continue monitoring and rerun the scan if the target changes.",
         }]
         fallback_profiles = raw_profiles if raw_profiles else [{
+            "user_id": normalized_user_id,
+            "email": None,
             "profile_type": "security_operator",
             "label": "Fallback Hunt Profile",
             "summary": "Generated to keep the persistence pipeline fully populated.",
@@ -644,23 +899,16 @@ class ScanStorage:
 
         profile_rows: List[Dict[str, Any]] = []
         for index, profile in enumerate(fallback_profiles):
-            profile_id = str(
-                uuid.uuid5(
-                    uuid.NAMESPACE_URL,
-                    f"profile:{normalized_scan_id}:{normalized_session_id}:{index}:{profile.get('profile_type', '')}:{profile.get('label', '')}",
-                )
-            )
-            uuid.UUID(profile_id)
             profile_rows.append(
-                {
-                    "id": uuid.UUID(profile_id),
-                    "scan_id": scan_uuid,
-                    "user_id": user_uuid,
-                    "profile_type": str(profile.get("profile_type", "unknown")).strip() or "unknown",
-                    "label": str(profile.get("label", "Untitled Profile")).strip() or "Untitled Profile",
-                    "summary": str(profile.get("summary", "")).strip(),
-                    "details": profile.get("details", {}) if isinstance(profile.get("details", {}), dict) else {},
-                }
+                self._build_profile_row(
+                    profile,
+                    index=index,
+                    normalized_scan_id=normalized_scan_id,
+                    normalized_session_id=normalized_session_id,
+                    scan_uuid=scan_uuid,
+                    fallback_user_id=user_uuid,
+                    now_iso=now_iso,
+                )
             )
 
         if not profile_rows:
@@ -785,8 +1033,8 @@ class ScanStorage:
                             cursor,
                             self.profiles_table,
                             profile_db_rows,
-                            columns=["id", "scan_id", "user_id", "profile_type", "label", "summary", "details"],
-                            update_columns=["scan_id", "user_id", "profile_type", "label", "summary", "details"],
+                            columns=["id", "scan_id", "user_id", "email", "profile_type", "label", "summary", "details"],
+                            update_columns=["scan_id", "user_id", "email", "profile_type", "label", "summary", "details"],
                         )
                         self._logger.info("INSERTED: %s row(s) in %s", inserted_profiles, self.profiles_table)
 
@@ -1035,6 +1283,24 @@ class ScanStorage:
                     )
                     return cursor.rowcount > 0
 
+    def save_final_report(self, scan_id: str, user_id: str, final_report: Dict[str, Any]) -> bool:
+        with self.get_connection() as connection:
+            with connection.transaction():
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        update public.scans
+                        set final_report = %s
+                        where id = %s and user_id = %s
+                        """,
+                        (
+                            Jsonb(final_report),
+                            uuid.UUID(self.resolve_record_identifier(scan_id)),
+                            uuid.UUID(str(user_id)),
+                        ),
+                    )
+                    return cursor.rowcount > 0
+
     def fetch_scan(self, scan_id: str, user_id: str) -> Dict[str, Any] | None:
         try:
             return self._fetch_owned_scan(scan_id=scan_id, user_id=user_id)
@@ -1042,6 +1308,33 @@ class ScanStorage:
             from fastapi import HTTPException
             self._logger.error("Scan retrieval failed: %s", str(error))
             raise HTTPException(status_code=500, detail="DATA_RETRIEVAL_FAILURE")
+
+    def fetch_git_target(self, target_id: str, user_id: str) -> Dict[str, Any] | None:
+        try:
+            return self._fetch_target_row(filters={"id": target_id}, user_id=user_id)
+        except Exception as error:
+            self._logger.error("Git target retrieval failed: %s", str(error))
+            return None
+
+    def resolve_git_target_for_url(self, target_url: str, user_id: str | None) -> Dict[str, Any] | None:
+        try:
+            parsed = urlparse(target_url if "://" in target_url else f"https://{target_url}")
+            hostname = (parsed.hostname or "").strip().lower()
+            if not hostname:
+                return None
+            for filters in (
+                {"domain": hostname},
+                {"target_domain": hostname},
+                {"hostname": hostname},
+                {"target_url": target_url},
+            ):
+                target = self._fetch_target_row(filters=filters, user_id=user_id)
+                if target:
+                    return target
+            return None
+        except Exception as error:
+            self._logger.error("Git target resolution failed: %s", str(error))
+            return None
 
     def fetch_vulnerabilities(self, scan_id: str, user_id: str) -> list[Dict[str, Any]]:
         try:

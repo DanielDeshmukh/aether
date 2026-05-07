@@ -193,6 +193,21 @@ const ScanningConsole = ({ scanSession, className = '' }) => {
                                     <span className={`block tracking-wide ${
                                         log.type === 'error' ? 'text-red-400' : 'text-lambo-white'
                                     }`}>{log.msg}</span>
+                                    {log.attack_vector && (
+                                        <div className="border border-red-600/30 bg-red-600/10 px-3 py-2 text-[10px] text-red-300">
+                                            Active Hit: {log.attack_vector}
+                                        </div>
+                                    )}
+                                    {log.evidence_snippet && (
+                                        <pre className="overflow-x-auto whitespace-pre-wrap border border-white/10 bg-black/40 px-3 py-2 text-[10px] text-lambo-ash">
+                                            {log.evidence_snippet}
+                                        </pre>
+                                    )}
+                                    {log.provided_solution && (
+                                        <div className="border border-lambo-gold/20 bg-lambo-gold/10 px-3 py-2 text-[10px] text-lambo-white">
+                                            Fix This: {log.provided_solution}
+                                        </div>
+                                    )}
                                     {log.phase && (
                                         <span className={`inline-block border px-2 py-1 text-[8px] tracking-[0.2em] ${
                                             log.type === 'error'

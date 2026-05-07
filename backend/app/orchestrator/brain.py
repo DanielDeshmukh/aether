@@ -4,12 +4,20 @@ import os
 import time
 import random
 import logging
+import uuid
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, AsyncIterator, Dict, List, Literal
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field, ValidationError
+try:
+    from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+    from playwright.async_api import async_playwright
+except ImportError:  # pragma: no cover - resolved when requirements are installed
+    PlaywrightTimeoutError = Exception
+    async_playwright = None
 
 from app.tools.audit_engine import audit_engine, format_audit_logs
 from app.tools.headers import format_header_logs, header_audit
@@ -22,6 +30,91 @@ except ImportError:  # pragma: no cover - resolved when requirements are install
     genai = None
 
 logger = logging.getLogger("aether.brain")
+OWASP_TOP_10_2021 = [
+    "A01:2021-Broken Access Control",
+    "A02:2021-Cryptographic Failures",
+    "A03:2021-Injection",
+    "A04:2021-Insecure Design",
+    "A05:2021-Security Misconfiguration",
+    "A06:2021-Vulnerable and Outdated Components",
+    "A07:2021-Identification and Authentication Failures",
+    "A08:2021-Software and Data Integrity Failures",
+    "A09:2021-Security Logging and Monitoring Failures",
+    "A10:2021-Server-Side Request Forgery",
+]
+OWASP_REMEDIATIONS = {
+    "A01:2021-Broken Access Control": "Enforce server-side authorization checks on every object and route, and deny access by default.",
+    "A02:2021-Cryptographic Failures": "Enforce HTTPS everywhere, set HSTS, and remove mixed-content or weak transport defaults.",
+    "A03:2021-Injection": "Use parameterized queries, strict input validation, and contextual output encoding across all dynamic sinks.",
+    "A04:2021-Insecure Design": "Model abuse cases during design review and add guardrails for risky workflows before implementation.",
+    "A05:2021-Security Misconfiguration": "Harden default headers, reduce exposed metadata, and align runtime configuration with OWASP secure defaults.",
+    "A06:2021-Vulnerable and Outdated Components": "Inventory framework and server versions, patch supported releases, and automate dependency review.",
+    "A07:2021-Identification and Authentication Failures": "Review session handling, MFA coverage, and cookie protections for every authentication boundary.",
+    "A08:2021-Software and Data Integrity Failures": "Sign and verify build artifacts, lock trusted update channels, and constrain privileged runtime loading.",
+    "A09:2021-Security Logging and Monitoring Failures": "Ensure high-risk actions are logged centrally with alerting and verified retention coverage.",
+    "A10:2021-Server-Side Request Forgery": "Constrain outbound requests with allowlists, network egress controls, and strict URL validation.",
+}
+
+
+async def analyze_tech_stack(target_url: str) -> Dict[str, Any]:
+    if async_playwright is None:
+        return {"target_url": target_url, "frameworks": [], "scripts": [], "headers": {}, "error": "Playwright is unavailable."}
+
+    browser = None
+    try:
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(args=["--no-sandbox"])
+            page = await browser.new_page()
+            response = await page.goto(target_url, wait_until="domcontentloaded", timeout=15000)
+            try:
+                await page.wait_for_load_state("networkidle", timeout=5000)
+            except PlaywrightTimeoutError:
+                logger.info("Playwright networkidle timeout for %s; continuing with captured DOM.", target_url)
+
+            title = await page.title()
+            final_url = page.url
+            scripts = await page.eval_on_selector_all("script[src]", "els => els.map((el) => el.src)")
+            metas = await page.eval_on_selector_all(
+                "meta",
+                "els => els.map((el) => ({name: el.getAttribute('name') || el.getAttribute('property') || el.getAttribute('http-equiv'), content: el.getAttribute('content')}))",
+            )
+            html = await page.content()
+            headers = {key.lower(): value for key, value in ((response.headers if response else {}) or {}).items()}
+
+            frameworks: List[str] = []
+            if "__NEXT_DATA__" in html or any("/_next/" in script for script in scripts):
+                frameworks.append("Next.js")
+            if "data-reactroot" in html or any("react" in script.lower() for script in scripts):
+                frameworks.append("React")
+            if any("vue" in script.lower() for script in scripts):
+                frameworks.append("Vue")
+            if any("angular" in script.lower() for script in scripts):
+                frameworks.append("Angular")
+            if headers.get("x-powered-by"):
+                frameworks.append(headers["x-powered-by"])
+            if headers.get("server"):
+                frameworks.append(headers["server"])
+
+            return {
+                "target_url": target_url,
+                "final_url": final_url,
+                "title": title,
+                "headers": headers,
+                "scripts": scripts[:25],
+                "meta": metas[:20],
+                "frameworks": sorted({framework for framework in frameworks if framework}),
+            }
+    except Exception as error:
+        return {
+            "target_url": target_url,
+            "frameworks": [],
+            "scripts": [],
+            "headers": {},
+            "error": f"Playwright tech stack analysis failed: {error}",
+        }
+    finally:
+        if browser is not None:
+            await browser.close()
 
 
 class PlanStep(BaseModel):
@@ -52,6 +145,24 @@ class BrainBoundaryError(Exception):
         super().__init__(message)
         self.message = message
         self.phase = phase
+
+
+class AgentFinding(BaseModel):
+    category: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    severity: Literal["Low", "Medium", "High", "Critical"]
+    attack_vector: str = Field(min_length=1)
+    detected_threat: str = Field(min_length=1)
+    evidence_snippet: str = Field(min_length=1)
+    provided_solution: str | None = None
+    remediation_code: str | None = None
+    detail: str = ""
+    evidence: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentResponsePayload(BaseModel):
+    thought_trace: Dict[str, Any] | List[Any]
+    vulnerabilities: List[AgentFinding] = Field(default_factory=list)
 
 
 @dataclass
@@ -305,9 +416,12 @@ class BrainOrchestrator:
         self.plan_hold_triggered = False
         self.agent = PentestAgent()
         self.initial_plan: InitialPlan | None = None
-        self.execution_results: Dict[str, Any] = {"port_scan": None, "header_audit": None, "audit_engine": None}
+        self.execution_results: Dict[str, Any] = {"tech_stack": None, "port_scan": None, "header_audit": None, "audit_engine": None}
         self.final_report: Dict[str, Any] | None = None
         self.remediations: Dict[str, Any] = {}
+        self.decision_trace: List[Dict[str, Any]] = []
+        self.global_abort = False
+        self.global_abort_reason: str | None = None
 
     async def ensure_initial_plan(self) -> InitialPlan:
         if self.initial_plan is None:
@@ -373,8 +487,236 @@ class BrainOrchestrator:
             },
         ]
 
-    async def run_execute_phase(self) -> AsyncIterator[dict]:
+    def append_thought(self, phase: str, message: str, *, category: str | None = None) -> Dict[str, Any]:
+        entry = {
+            "phase": phase,
+            "message": message,
+            "category": category,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        self.decision_trace.append(entry)
+        self.state.notes.append(message)
+        return entry
+
+    def serialize_thought_trace(self) -> List[Dict[str, Any]]:
+        if self.decision_trace:
+            return self.decision_trace
+        if self.initial_plan is not None:
+            return [
+                {"phase": step.label.lower(), "message": step.message, "timestamp": datetime.now(timezone.utc).isoformat()}
+                for step in self.initial_plan.steps
+            ]
+        return []
+
+    def should_abort(self) -> bool:
+        return self.global_abort or self.state.status == BrainStatus.TERMINATED
+
+    def trigger_safety_gate(self, reason: str) -> None:
+        self.global_abort = True
+        self.global_abort_reason = reason
+        self.state.status = BrainStatus.TERMINATED
+        self.state.requires_operator = False
+        self.state.resume_reason = None
+        self.state.error_message = reason
+        self.state.notes.append(reason)
+        self.state.pause_event.set()
+
+    def _evidence_snippet(self, finding: Dict[str, Any]) -> str:
+        if finding.get("evidence_snippet"):
+            return str(finding["evidence_snippet"])[:600]
+        evidence = finding.get("evidence")
+        if isinstance(evidence, dict) and evidence:
+            return json.dumps(evidence, ensure_ascii=True)[:600]
+        return str(finding.get("detail") or finding.get("title") or "No evidence captured.")[:600]
+
+    def _finding_to_payload(self, category: str, finding: Dict[str, Any]) -> Dict[str, Any]:
+        severity = str(finding.get("severity", "Low")).capitalize()
+        return {
+            "category": category,
+            "title": finding.get("title", f"{category} signal"),
+            "severity": severity if severity in {"Low", "Medium", "High", "Critical"} else "Low",
+            "attack_vector": finding.get("attack_vector") or finding.get("header") or f"{category} assessment signal",
+            "detected_threat": finding.get("detected_threat") or finding.get("title") or finding.get("detail") or category,
+            "evidence_snippet": self._evidence_snippet(finding),
+            "provided_solution": finding.get("provided_solution") or OWASP_REMEDIATIONS.get(category, "Review the relevant control and apply OWASP-aligned hardening."),
+            "detail": finding.get("detail") or finding.get("title") or category,
+            "evidence": finding.get("evidence") or {},
+        }
+
+    def _category_signal(self, category: str) -> Dict[str, Any] | None:
+        header_findings = list((self.execution_results.get("header_audit") or {}).get("findings") or [])
+        audit_findings = list((self.execution_results.get("audit_engine") or {}).get("findings") or [])
+        tech_stack = self.execution_results.get("tech_stack") or {}
+        headers = tech_stack.get("headers") or {}
+
+        if category == "A03:2021-Injection":
+            finding = next((item for item in audit_findings if "sqli" in str(item.get("category", "")).lower()), None)
+            if finding:
+                finding = {**finding, "attack_vector": "Input reflection and SQL error heuristic"}
+            return finding
+
+        if category == "A05:2021-Security Misconfiguration":
+            finding = next(iter(header_findings), None)
+            if finding:
+                return {
+                    "title": finding.get("header", "Security header weakness"),
+                    "detail": finding.get("detail", "Response hardening control missing or misconfigured."),
+                    "severity": finding.get("severity", "Medium"),
+                    "attack_vector": f"Header audit via {finding.get('header', 'response inspection')}",
+                    "evidence": finding,
+                }
+            if headers.get("server"):
+                return {
+                    "title": "Verbose Server Banner",
+                    "detail": "Server banner disclosed implementation details during passive reconnaissance.",
+                    "severity": "Low",
+                    "attack_vector": "Passive response header inspection",
+                    "evidence": {"server": headers.get("server")},
+                }
+            return None
+
+        if category == "A06:2021-Vulnerable and Outdated Components":
+            server_banner = headers.get("server", "")
+            if any(char.isdigit() for char in server_banner):
+                return {
+                    "title": "Versioned Component Disclosure",
+                    "detail": "Observed a version-bearing server banner during tech stack fingerprinting.",
+                    "severity": "Low",
+                    "attack_vector": "Playwright-assisted header and DOM fingerprinting",
+                    "evidence": {"server": server_banner, "frameworks": tech_stack.get("frameworks", [])},
+                }
+            return None
+
+        if category == "A02:2021-Cryptographic Failures":
+            finding = next((item for item in header_findings if "strict" in str(item.get("header", "")).lower() or "transport" in str(item.get("detail", "")).lower()), None)
+            if finding:
+                return {
+                    "title": finding.get("header", "Transport protection weakness"),
+                    "detail": finding.get("detail", "Transport hardening is incomplete."),
+                    "severity": finding.get("severity", "Medium"),
+                    "attack_vector": "TLS and browser-header review",
+                    "evidence": finding,
+                }
+            return None
+
+        return None
+
+    async def _persist_trace(self, storage: Any, user_id: str, resolved_scan_id: str, resolved_session_id: str, vulnerabilities: List[Dict[str, Any]] | None = None) -> Dict[str, Any]:
+        return await process_agent_response(
+            {
+                "thought_trace": self.serialize_thought_trace(),
+                "vulnerabilities": vulnerabilities or [],
+            },
+            user_id=user_id,
+            scan_id=resolved_scan_id,
+            session_id=resolved_session_id,
+            storage=storage,
+        )
+
+    async def _run_owasp_assessment_loop(
+        self,
+        *,
+        user_id: str,
+        resolved_scan_id: str,
+        resolved_session_id: str,
+        storage: Any,
+    ) -> AsyncIterator[dict]:
+        for index, category in enumerate(OWASP_TOP_10_2021, start=1):
+            if self.should_abort():
+                self.append_thought("execute", "SCAN_TERMINATED_BY_SAFETY_GATE", category=category)
+                await self._persist_trace(storage, user_id, resolved_scan_id, resolved_session_id)
+                yield {
+                    "type": "error",
+                    "phase": "execute",
+                    "msg": "SCAN_TERMINATED_BY_SAFETY_GATE",
+                    "brain": self.state.snapshot(),
+                }
+                return
+
+            self.state.current_step += 1
+            self.append_thought("execute", f"Evaluating {category} with passive and bounded telemetry.", category=category)
+            await self._persist_trace(storage, user_id, resolved_scan_id, resolved_session_id)
+            yield {
+                "type": "thought",
+                "phase": "execute",
+                "msg": f"OWASP LOOP {index}/10: {category.upper()}",
+                "brain": self.state.snapshot(),
+                "results": self.serialize_results(),
+            }
+
+            finding = self._category_signal(category)
+            if finding:
+                payload = self._finding_to_payload(category, finding)
+                self.append_thought("analyze", f"Signal logged for {category}; moving to the next assessment lane.", category=category)
+                await self._persist_trace(storage, user_id, resolved_scan_id, resolved_session_id, [payload])
+                yield {
+                    "type": "alert",
+                    "phase": "analyze",
+                    "msg": f"ACTIVE HIT: {payload['title'].upper()}",
+                    "brain": self.state.snapshot(),
+                    "attack_vector": payload["attack_vector"],
+                    "severity": payload["severity"],
+                    "evidence_snippet": payload["evidence_snippet"],
+                    "provided_solution": payload["provided_solution"],
+                    "category": payload["category"],
+                }
+                yield {
+                    "type": "remediation",
+                    "phase": "remediate",
+                    "msg": f"FIX THIS: {payload['title'].upper()}",
+                    "brain": self.state.snapshot(),
+                    "provided_solution": payload["provided_solution"],
+                    "category": payload["category"],
+                }
+                continue
+
+            self.append_thought("analyze", f"No bounded signal was confirmed for {category}; marking the category evaluated.", category=category)
+            await self._persist_trace(storage, user_id, resolved_scan_id, resolved_session_id)
+            yield {
+                "type": "thought",
+                "phase": "analyze",
+                "msg": f"ASSESSMENT COMPLETE: {category.upper()} EVALUATED WITH NO CONFIRMED SAFE SIGNAL.",
+                "brain": self.state.snapshot(),
+                "results": self.serialize_results(),
+            }
+
+    async def run_execute_phase(
+        self,
+        *,
+        user_id: str | None = None,
+        resolved_scan_id: str | None = None,
+        resolved_session_id: str | None = None,
+        storage: Any | None = None,
+    ) -> AsyncIterator[dict]:
         self.state.phase = "execute"
+        tech_stack_result = await analyze_tech_stack(self.state.target_url)
+        self.execution_results["tech_stack"] = tech_stack_result
+        self.append_thought("observe", "Playwright reconnaissance completed for technology fingerprinting.")
+        if storage and user_id and resolved_scan_id and resolved_session_id:
+            await self._persist_trace(storage, user_id, resolved_scan_id, resolved_session_id)
+        yield {
+            "type": "thought",
+            "phase": "observe",
+            "msg": (
+                f"PLAYWRIGHT RECON: STACK={', '.join(tech_stack_result.get('frameworks', [])) or 'UNKNOWN'} "
+                f"TITLE={tech_stack_result.get('title', 'UNAVAILABLE')}"
+            ),
+            "brain": self.state.snapshot(),
+            "results": self.serialize_results(),
+        }
+
+        if self.should_abort():
+            self.append_thought("execute", "SCAN_TERMINATED_BY_SAFETY_GATE")
+            if storage and user_id and resolved_scan_id and resolved_session_id:
+                await self._persist_trace(storage, user_id, resolved_scan_id, resolved_session_id)
+            yield {
+                "type": "error",
+                "phase": "execute",
+                "msg": "SCAN_TERMINATED_BY_SAFETY_GATE",
+                "brain": self.state.snapshot(),
+            }
+            return
+
         try:
             port_result = await asyncio.wait_for(port_scan(self.state.target_url), timeout=12)
         except asyncio.TimeoutError as error:
@@ -391,6 +733,9 @@ class BrainOrchestrator:
         if port_result.get("error"):
             raise BrainBoundaryError(str(port_result["error"]), phase="execute")
         self.execution_results["port_scan"] = port_result
+        self.append_thought("execute", "Port exposure mapping completed.")
+        if storage and user_id and resolved_scan_id and resolved_session_id:
+            await self._persist_trace(storage, user_id, resolved_scan_id, resolved_session_id)
 
         for message in format_port_logs(port_result):
             yield {
@@ -417,6 +762,9 @@ class BrainOrchestrator:
         if header_result.get("error"):
             raise BrainBoundaryError(str(header_result["error"]), phase="execute")
         self.execution_results["header_audit"] = header_result
+        self.append_thought("execute", "Header security review completed.")
+        if storage and user_id and resolved_scan_id and resolved_session_id:
+            await self._persist_trace(storage, user_id, resolved_scan_id, resolved_session_id)
 
         for message in format_header_logs(header_result):
             yield {
@@ -443,6 +791,9 @@ class BrainOrchestrator:
         if audit_result.get("error"):
             raise BrainBoundaryError(str(audit_result["error"]), phase="execute")
         self.execution_results["audit_engine"] = audit_result
+        self.append_thought("execute", "Bounded application audit completed.")
+        if storage and user_id and resolved_scan_id and resolved_session_id:
+            await self._persist_trace(storage, user_id, resolved_scan_id, resolved_session_id)
 
         for message in format_audit_logs(audit_result):
             yield {
@@ -452,6 +803,15 @@ class BrainOrchestrator:
                 "brain": self.state.snapshot(),
                 "results": self.serialize_results(),
             }
+
+        if storage and user_id and resolved_scan_id and resolved_session_id:
+            async for category_log in self._run_owasp_assessment_loop(
+                user_id=user_id,
+                resolved_scan_id=resolved_scan_id,
+                resolved_session_id=resolved_session_id,
+                storage=storage,
+            ):
+                yield category_log
 
         try:
             verdict = await asyncio.wait_for(
@@ -478,7 +838,14 @@ class BrainOrchestrator:
             "final_report": self.serialize_final_report(),
         }
 
-    async def stream(self) -> AsyncIterator[dict]:
+    async def stream(
+        self,
+        *,
+        user_id: str | None = None,
+        resolved_scan_id: str | None = None,
+        resolved_session_id: str | None = None,
+        storage: Any | None = None,
+    ) -> AsyncIterator[dict]:
         steps = await self.build_steps()
 
         for index, step in enumerate(steps):
@@ -513,7 +880,12 @@ class BrainOrchestrator:
                     "msg": f"PLAN: OPERATOR CLEARANCE ACCEPTED. RESUMING WITH TOKEN {self.state.resume_token}.",
                     "brain": self.state.snapshot(),
                 }
-                async for execute_log in self.run_execute_phase():
+                async for execute_log in self.run_execute_phase(
+                    user_id=user_id,
+                    resolved_scan_id=resolved_scan_id,
+                    resolved_session_id=resolved_session_id,
+                    storage=storage,
+                ):
                     yield execute_log
                 await asyncio.sleep(0.5)
                 continue
@@ -537,6 +909,7 @@ class BrainOrchestrator:
 
     def serialize_results(self) -> Dict[str, Any]:
         return {
+            "tech_stack": self.execution_results.get("tech_stack"),
             "port_scan": self.execution_results.get("port_scan"),
             "header_audit": self.execution_results.get("header_audit"),
             "audit_engine": self.execution_results.get("audit_engine"),
@@ -598,9 +971,7 @@ class BrainOrchestrator:
         self.state.pause_event.set()
 
     def terminate(self) -> None:
-        self.state.status = BrainStatus.TERMINATED
-        self.state.requires_operator = False
-        self.state.pause_event.set()
+        self.trigger_safety_gate("SCAN_TERMINATED_BY_SAFETY_GATE")
 
     def fail(self, reason: str, *, phase: str = "analyze") -> None:
         self.state.status = BrainStatus.FAILED
@@ -631,3 +1002,61 @@ class BrainOrchestrator:
             self.terminate()
 
         return self.state.snapshot()
+
+
+async def process_agent_response(
+    model_output: Dict[str, Any] | str,
+    user_id: str,
+    scan_id: str,
+    session_id: str,
+    storage: Any,
+) -> Dict[str, Any]:
+    """
+    Parse a structured model payload and persist scan trace plus findings.
+
+    This helper only handles storage mapping. It does not generate or execute
+    offensive test logic itself.
+    """
+    payload = (
+        AgentResponsePayload.model_validate_json(model_output)
+        if isinstance(model_output, str)
+        else AgentResponsePayload.model_validate(model_output)
+    )
+
+    normalized_user_id = uuid.UUID(str(user_id))
+    normalized_scan_id = uuid.UUID(str(scan_id))
+    normalized_session_id = uuid.UUID(str(session_id))
+
+    trace_updated = await asyncio.to_thread(
+        storage.update_scan_trace,
+        normalized_user_id,
+        normalized_scan_id,
+        payload.thought_trace,
+    )
+
+    inserted_ids: List[str] = []
+    for flaw in payload.vulnerabilities:
+        print(f"DEBUG: [{datetime.now(timezone.utc).isoformat()}] User {normalized_user_id} found {flaw.category}")
+        vulnerability_id = await asyncio.to_thread(
+            storage.insert_vulnerability,
+            normalized_user_id,
+            normalized_scan_id,
+            flaw.category,
+            flaw.title,
+            flaw.severity,
+            flaw.detail or flaw.detected_threat,
+            normalized_session_id,
+            flaw.attack_vector,
+            flaw.detected_threat,
+            flaw.evidence_snippet,
+            flaw.provided_solution or flaw.remediation_code or "",
+            flaw.evidence,
+            None,
+        )
+        inserted_ids.append(str(vulnerability_id))
+
+    return {
+        "trace_updated": trace_updated,
+        "vulnerability_ids": inserted_ids,
+        "vulnerability_count": len(inserted_ids),
+    }
