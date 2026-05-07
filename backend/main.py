@@ -85,12 +85,9 @@ def get_allowed_origins() -> List[str]:
 
 
 app = FastAPI(title="AETHER Engine API")
-<<<<<<< HEAD
 app.include_router(aether_router)
-=======
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exception_handler)
->>>>>>> 40de2982ea0dc0326d7d04f6230c999cdce836db
 
 app.add_middleware(
     CORSMiddleware,
@@ -202,10 +199,7 @@ def persist_scan_state(scan_id: str, brain: BrainOrchestrator, target_url: str, 
         logger.warning("Attempted to persist scan state without user_id for scan_id=%s", scan_id)
         return False
 
-<<<<<<< HEAD
-=======
     # Requirement: session_id MUST exist. Generate a deterministic ID for telemetry + persistence.
->>>>>>> 40de2982ea0dc0326d7d04f6230c999cdce836db
     session_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sess_{scan_id}"))
     return scan_storage.persist_full_pipeline(
         scan_id=scan_id,
@@ -218,7 +212,7 @@ def persist_scan_state(scan_id: str, brain: BrainOrchestrator, target_url: str, 
         final_report=brain.serialize_final_report(),
         remediations=brain.serialize_remediations(),
     )
-<<<<<<< HEAD
+
 
 def use_nvidia_orchestrator() -> bool:
     return os.getenv("AETHER_USE_NVIDIA_ORCHESTRATOR", "").strip().lower() in {"1", "true", "yes", "on"}
@@ -276,8 +270,6 @@ def build_nvidia_final_report(validation_result: dict, target_url: str) -> dict:
             f"captured {len(findings)} persisted finding(s)."
         ),
     }
-=======
->>>>>>> 40de2982ea0dc0326d7d04f6230c999cdce836db
 
 
 def extract_client_ip(request: Request) -> str | None:
@@ -609,14 +601,11 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
 
     target_url = str(scan["target_url"])
     user_id = scan.get("user_id")
-<<<<<<< HEAD
     resolved_scan_id = scan_storage.resolve_record_identifier(scan_id)
     resolved_session_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sess_{scan_id}"))
     nvidia_mode = use_nvidia_orchestrator()
     aether_storage = AetherStorage() if not nvidia_mode else None
 
-    try:
-=======
     persistence_healthy = True
 
     def try_persist(stage: str, allow_retry: bool = False) -> bool:
@@ -657,7 +646,6 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
             logger.exception("Schema sync failed before initial persistence for %s", scan_id)
         try_persist("Initial")
 
->>>>>>> 40de2982ea0dc0326d7d04f6230c999cdce836db
         await safe_send_json(
             websocket,
             {
@@ -820,7 +808,6 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
                     )
                     break
 
-<<<<<<< HEAD
                 await safe_send_json(websocket, log)
 
                 if log["phase"] == "plan" and brain.state.status == BrainStatus.PAUSED:
@@ -839,25 +826,10 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
                                 "brain": snapshot,
                             }
                         )
-
-                        try:
-                            persisted = persist_scan_state(scan_id, brain, target_url, user_id)
-                            logger.info("Plan-stage scan persistence for %s: %s", scan_id, persisted)
-                        except Exception:
-                            logger.exception("Plan-stage scan persistence failed for %s", scan_id)
+                        try_persist("Plan-stage")
 
                 if log["phase"] in {"execute", "analyze"}:
-                    try:
-                        persisted = persist_scan_state(scan_id, brain, target_url, user_id)
-                        logger.info("%s-stage scan persistence for %s: %s", log["phase"].capitalize(), scan_id, persisted)
-                    except Exception:
-                        logger.exception("%s-stage scan persistence failed for %s", log["phase"].capitalize(), scan_id)
-=======
-                    try_persist("Plan-stage")
-
-            if log["phase"] in {"execute", "analyze"}:
-                try_persist(f"{log['phase'].capitalize()}-stage")
->>>>>>> 40de2982ea0dc0326d7d04f6230c999cdce836db
+                    try_persist(f"{log['phase'].capitalize()}-stage")
     except BrainBoundaryError as error:
         logger.exception("Scan %s failed with a guarded runtime error", scan_id)
         await persist_and_emit_failure(error.message, error.phase)

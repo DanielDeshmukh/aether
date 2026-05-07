@@ -916,7 +916,6 @@ class ScanStorage:
         profile_rows: List[Dict[str, Any]] = []
         for index, profile in enumerate(fallback_profiles):
             profile_rows.append(
-<<<<<<< HEAD
                 self._build_profile_row(
                     profile,
                     index=index,
@@ -926,18 +925,6 @@ class ScanStorage:
                     fallback_user_id=user_uuid,
                     now_iso=now_iso,
                 )
-=======
-                {
-                    "id": uuid.UUID(profile_id),
-                    "scan_id": scan_uuid,
-                    "user_id": user_uuid,
-                    "email": str(profile.get("email") or profile.get("user_id") or profile_email),
-                    "profile_type": str(profile.get("profile_type", "unknown")).strip() or "unknown",
-                    "label": str(profile.get("label", "Untitled Profile")).strip() or "Untitled Profile",
-                    "summary": str(profile.get("summary", "")).strip(),
-                    "details": profile.get("details", {}) if isinstance(profile.get("details", {}), dict) else {},
-                }
->>>>>>> 40de2982ea0dc0326d7d04f6230c999cdce836db
             )
 
         if not profile_rows:
