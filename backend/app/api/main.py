@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Dict, List
 from urllib.parse import urlparse
 
-logo_path = Path(r"D:\Vs Code\Aether\aether\frontend\public\images\logo.png")
+logo_path = Path("frontend/public/images/logo.png").resolve()
 logo_uri = logo_path.as_uri()
 # Windows-specific fix for Playwright and asyncio subprocess handling
 if sys.platform == "win32":

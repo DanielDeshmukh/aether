@@ -19,7 +19,8 @@ except ImportError:  # pragma: no cover - resolved when requirements are install
     PlaywrightTimeoutError = Exception
     async_playwright = None
 
-from app.tools.audit_engine import audit_engine, format_audit_logs
+from app.tools.audit_engine import format_audit_logs
+from app.engine.heuristic_engine import HeuristicEngine
 from app.tools.headers import format_header_logs, header_audit
 from app.tools.remediation import find_vulnerability, generate_remediation
 from app.tools.scanner import format_port_logs, port_scan
@@ -777,7 +778,8 @@ class BrainOrchestrator:
             }
 
         try:
-            audit_result = await asyncio.wait_for(audit_engine(self.state.target_url), timeout=14)
+            engine = HeuristicEngine(self.state.target_url)
+            audit_result = await asyncio.wait_for(engine.run_all(), timeout=30)
         except asyncio.TimeoutError as error:
             raise BrainBoundaryError(
                 "Audit engine timed out before vulnerability profiling could complete.",

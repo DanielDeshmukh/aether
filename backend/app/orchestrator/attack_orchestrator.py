@@ -28,6 +28,7 @@ except ImportError:  # pragma: no cover - resolved when requirements are install
 
 from app.engine.playwright_driver import build_safety_headers, create_hardened_browser_context
 from app.engine.validation_lanes import ValidationLaneManager
+from app.engine.heuristic_engine import HeuristicEngine
 from app.orchestrator.remediation_agent import RemediationAgent
 from app.services.log_monitor import LogMonitor
 
@@ -560,8 +561,26 @@ class AttackOrchestrator:
         self._ensure_allowed_target(target_url)
         await self.log_monitor.mark_scan_start()
         trace = await self.nemotron_reasoning_stream(target_url)
-        await self._append_trace(trace, "plan", "Validation loop initialized.")
+        await self._append_trace(trace, "plan", "Attack Surface Orchestrator initialized.")
         await self._preflight_latency_check(target_url, trace)
+
+        # Deep heuristic pass as part of attack surface orchestration
+        await self._append_trace(trace, "observe", "Launching deep heuristic engine pass.")
+        heuristic_engine = HeuristicEngine(target_url)
+        heuristic_results = await heuristic_engine.run_all()
+        for finding in heuristic_results.get("findings", []):
+            await self._insert_finding(
+                trace,
+                category=finding["category"],
+                title=finding["title"],
+                severity=finding["severity"],
+                detail=finding["detail"],
+                attack_vector=finding["attack_vector"],
+                evidence_snippet=finding["evidence_snippet"],
+                provided_solution=finding.get("provided_solution", "Apply standard hardening."),
+                evidence=finding.get("evidence"),
+            )
+
         tech_stack = await self._tech_stack_recon(target_url, trace)
         profile_rows = [
             {

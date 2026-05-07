@@ -60,5 +60,5 @@
 
 ## Current Gaps To Respect
 
-- The codebase protocol mentions AETHER-Shield middleware and Intent-Router conventions, but those names are not yet represented as concrete modules in the current implementation.
+- AETHER-Shield middleware and Intent-Router conventions are implemented in `backend/app/api/shield.py` and `backend/app/orchestrator/intent_router.py`.
 - There are parallel storage/auth paths in the backend; when documenting or extending behavior, treat `backend/main.py` plus `ScanStorage` as the main active path and call out legacy pieces explicitly.

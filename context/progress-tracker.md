@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-- In progress: Hardened MVP with implemented quota, SSRF, verification, persistence, dashboard, and remediation foundations.
+- Completed: Hardened MVP with implemented quota, SSRF, verification, persistence, dashboard, and finalized orchestrator/engine foundations.
 
 ## Current Goal
 
-- Stabilize the active architecture around the authenticated scan loop, persisted debrief experience, and defensive validation controls while cleaning remaining integration mismatches.
+- Finalized Aether core with Attack Surface Orchestrator and Heuristic Engine.
 
 ## Completed
 
@@ -21,20 +21,21 @@
 - Domain verification service is implemented and used before active validation.
 - Validation lanes exist for bounded XSS and injection confirmation on verified/allowlisted targets.
 - Remediation generation flow exists through the remediation WebSocket path.
+- Resolved backend merge markers in `backend/main.py` and `backend/app/api/deps.py`.
+- Implemented `AETHER-Shield` middleware for safety handshake and token validation.
+- Implemented `Intent-Router` for deterministic schema-based routing of scan intents.
+- Formalized `HeuristicEngine` with deep sensitive file and CORS checks.
+- Refactored `AttackOrchestrator` into a full Attack Surface Orchestrator.
 
 ## In Progress
 
-- Backend cleanup between the modern `ScanStorage` path and older `AetherStorage` or `aether_routes.py` path.
-- Merge-conflict resolution in `backend/main.py` and `backend/app/api/deps.py`.
 - End-to-end Git remediation PR flow. Frontend exposes the action, but the current remediation WebSocket handler does not yet process `create_pull_request`.
 - Documentation alignment so the context pack reflects the live repository instead of templates.
 
 ## Next Up
 
-- Resolve the backend merge markers and choose one canonical auth/storage path.
 - Finish wiring Git pull-request remediation or remove the exposed frontend action until supported.
 - Audit dashboard and debrief responsiveness on smaller breakpoints per project definition of done.
-- Confirm whether AETHER-Shield middleware and Hector-style Intent-Router conventions need to be introduced as code or remain protocol-only guidance.
 
 ## Open Questions
 
