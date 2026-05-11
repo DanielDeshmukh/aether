@@ -85,12 +85,9 @@ def get_allowed_origins() -> List[str]:
 
 
 app = FastAPI(title="AETHER Engine API")
-<<<<<<< HEAD
 app.include_router(aether_router)
-=======
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exception_handler)
->>>>>>> 40de2982ea0dc0326d7d04f6230c999cdce836db
 
 app.add_middleware(AetherShieldMiddleware)
 app.add_middleware(
@@ -670,7 +667,6 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
             logger.exception("Schema sync failed before initial persistence for %s", scan_id)
         try_persist("Initial")
 
->>>>>>> 40de2982ea0dc0326d7d04f6230c999cdce836db
         await safe_send_json(
             websocket,
             {
