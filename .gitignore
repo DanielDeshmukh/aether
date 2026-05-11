@@ -6,7 +6,15 @@
 
 # Dependencies & Build
 node_modules/
+frontend/node_modules/
+.venv/
+backend/venv/
 venv/
 __pycache__/
+**/__pycache__/
+.pytest_cache/
+frontend/dist/
 dist/
 *.log
+.claude-flow/
+.sixth/
