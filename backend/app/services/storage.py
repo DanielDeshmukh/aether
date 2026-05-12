@@ -1376,6 +1376,44 @@ class ScanStorage:
             self._logger.error("Git target resolution failed: %s", str(error))
             return None
 
+    def get_or_create_target(self, target_url: str, user_id: str) -> str:
+        """
+        Upsert pattern: Try to find the target by domain, or insert it if not found.
+        Returns the target ID (UUID).
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(row_factory=psycopg.rows.dict_row) as cursor:
+                    # 1. Try to find the target by domain
+                    cursor.execute(
+                        "SELECT id FROM targets WHERE domain = %s",
+                        (target_url,)
+                    )
+                    target = cursor.fetchone()
+
+                    if target:
+                        self._logger.info("TARGET_FOUND: domain=%s id=%s", target_url, target['id'])
+                        return str(target['id'])
+
+                    # 2. If not found, INSERT it immediately
+                    # Include user_id as it's NOT NULL in the schema
+                    # The 'RETURNING id' ensures we get the new UUID back
+                    cursor.execute(
+                        "INSERT INTO targets (domain, user_id, created_at) VALUES (%s, %s, NOW()) RETURNING id",
+                        (target_url, user_id)
+                    )
+                    new_target = cursor.fetchone()
+                    conn.commit()
+                    
+                    if new_target:
+                        self._logger.info("TARGET_CREATED: domain=%s user_id=%s id=%s", target_url, user_id, new_target['id'])
+                        return str(new_target['id'])
+                    
+                    raise Exception(f"Failed to create target for domain: {target_url}")
+        except Exception as error:
+            self._logger.error("Get or create target failed for domain=%s user_id=%s: %s", target_url, user_id, str(error))
+            raise
+
     def fetch_vulnerabilities(self, scan_id: str, user_id: str) -> list[Dict[str, Any]]:
         try:
             scan = self.fetch_scan(scan_id, user_id)
