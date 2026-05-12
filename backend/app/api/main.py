@@ -593,6 +593,16 @@ async def create_scan(
     if not consent_logged:
         raise HTTPException(status_code=503, detail="CONSENT COULD NOT BE PERSISTED. HUNT ABORTED.")
 
+    try:
+        target_id = scan_storage.get_or_create_target(
+            target_url=normalized_target,
+            user_id=user_id
+        )
+        logger.info("Target acquired: target_id=%s domain=%s user_id=%s", target_id, normalized_target, user_id)
+    except Exception as error:
+        logger.exception("Failed to get or create target: %s", str(error))
+        raise HTTPException(status_code=503, detail="TARGET REGISTRATION FAILED. HUNT ABORTED.")
+
     return create_scan_record(normalized_target, user_id=user_id)
 
 
