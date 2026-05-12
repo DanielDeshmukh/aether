@@ -18,3 +18,4 @@ dist/
 *.log
 .claude-flow/
 .sixth/
+PHASE_COMPLETION_REPORT.md

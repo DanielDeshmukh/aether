@@ -2,7 +2,12 @@
 
 ## Current Phase
 
-- Completed: Hardened MVP with implemented quota, SSRF, verification, persistence, dashboard, and finalized orchestrator/engine foundations.
+- ✅ **COMPLETED**: Target Registration with Upsert (Get-or-Create) Pattern
+  - Implemented `get_or_create_target()` method in `ScanStorage` class
+  - Enforces database schema compliance with NOT NULL `user_id` field
+  - Integrated into `create_scan` endpoint with proper error handling
+  - Full unit test coverage with 5 tests (all passing)
+  - API endpoint tests updated and passing
 
 ## Current Goal
 
@@ -27,6 +32,7 @@
 - Formalized `HeuristicEngine` with deep sensitive file and CORS checks.
 - Refactored `AttackOrchestrator` into a full Attack Surface Orchestrator.
 - Integrated `create_pull_request` in the remediation WebSocket handler.
+- **Target Registration with Upsert Pattern**: Get-or-create targets with user_id tracking (NEW)
 
 ## In Progress
 
@@ -35,9 +41,14 @@
 
 ## Next Up
 
-- Audit dashboard and debrief responsiveness on smaller breakpoints per project definition of done.
+- **Phase 15: Dashboard and Debrief Responsiveness** — Audit dashboard and debrief responsiveness on smaller breakpoints (mobile/tablet) per project definition of done.
+  - Test dashboard on mobile breakpoints (320px, 768px, 1024px)
+  - Test debrief view on smaller screens
+  - Optimize layout and component sizing
+  - Ensure all scan data is readable and functional on mobile devices
 
 ## Open Questions
 
 - Should `AetherStorage` and `aether_routes.py` remain supported, or should the project standardize entirely on `ScanStorage` plus `backend/main.py`?
 - Is the NVIDIA orchestration path intended to be the default production path or a guarded experimental mode?
+- Should the target registration trigger any initial domain verification automatically, or remain a manual flow?
