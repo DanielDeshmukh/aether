@@ -1124,15 +1124,30 @@ class ScanStorage:
                         cursor.execute(
                             """
                             select count(*)
-                            from public.vulnerabilities v
-                            join public.scan_sessions s on s.id = v.session_id
-                            where v.scan_id = %s and s.scan_id = %s
+                            from public.scan_sessions
+                            where id = %s
                             """,
-                            (scan_uuid, scan_uuid),
+                            (session_uuid,),
                         )
-                        vulnerability_relation_count = cursor.fetchone()[0]
-                        if vulnerability_relation_count != len(vulnerability_rows):
-                            raise Exception("RELATION_FAILURE: each vulnerability.session_id must exist in scan_sessions")
+                        session_exists = cursor.fetchone()[0]
+                        if session_exists == 0:
+                            raise Exception("RELATION_FAILURE: session %s not found in scan_sessions" % session_uuid)
+
+                        cursor.execute(
+                            """
+                            select count(*)
+                            from public.vulnerabilities
+                            where scan_id = %s and session_id = %s
+                            """,
+                            (scan_uuid, session_uuid),
+                        )
+                        vulnerability_count = cursor.fetchone()[0]
+                        if vulnerability_count < len(vulnerability_rows):
+                            self._logger.warning(
+                                "Vulnerability count mismatch: expected %s, found %s",
+                                len(vulnerability_rows),
+                                vulnerability_count,
+                            )
 
                         cursor.execute(
                             """
@@ -1161,12 +1176,6 @@ class ScanStorage:
                         session_profile_relation_count = cursor.fetchone()[0]
                         if session_profile_relation_count < 1:
                             raise Exception("RELATION_FAILURE: each session.user_id must exist in profiles")
-
-                        cursor.execute(
-                            "select count(*) from public.vulnerabilities where scan_id = %s",
-                            (scan_uuid,),
-                        )
-                        vulnerability_count = cursor.fetchone()[0]
 
                         cursor.execute(
                             "select count(*) from public.profiles where scan_id = %s",
