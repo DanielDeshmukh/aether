@@ -284,9 +284,10 @@ Rules:
 
         try:
             client = genai.Client(api_key=self.api_key)
+            prompt_text = self._build_prompt(target_url, hostname)
             response = self._generate_with_retry(
                 client,
-                contents=self._build_prompt(target_url, hostname),
+                contents=genai.types.Content(parts=[genai.types.Part(text=prompt_text)]),
                 config={
                     "response_mime_type": "application/json",
                     "response_json_schema": InitialPlan.model_json_schema(),
@@ -394,9 +395,10 @@ Rules:
             client = genai.Client(api_key=self.api_key)
             # Filter results to keep size manageable for LLM
             lite_results = {k: v for k, v in results.items() if v is not None}
+            verdict_prompt = prompt.strip()
             response = self._generate_with_retry(
                 client,
-                contents=prompt,
+                contents=genai.types.Content(parts=[genai.types.Part(text=verdict_prompt)]),
                 config={
                     "response_mime_type": "application/json",
                     "response_json_schema": FinalVerdict.model_json_schema(),

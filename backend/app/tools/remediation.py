@@ -87,7 +87,7 @@ Rules:
         client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
             model="gemini-2.5-flash",
-            contents=prompt,
+            contents=genai.types.Content(parts=[genai.types.Part(text=prompt)]),
             config={"response_mime_type": "application/json"},
         )
         cleaned = response.text.strip()

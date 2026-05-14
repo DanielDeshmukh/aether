@@ -1380,38 +1380,49 @@ class ScanStorage:
         """
         Upsert pattern: Try to find the target by domain, or insert it if not found.
         Returns the target ID (UUID).
+        Newly created targets are automatically verified since the user just registered
+        ownership and provided consent.
         """
+        # Extract domain/hostname from full URL
+        parsed = urlparse(target_url if "://" in target_url else f"https://{target_url}")
+        domain = (parsed.hostname or target_url).strip().lower()
+
+        self._logger.info("GET_OR_CREATE_TARGET: input=%s extracted_domain=%s user_id=%s", target_url, domain, user_id)
+
         try:
             with self.get_connection() as conn:
                 with conn.cursor(row_factory=psycopg.rows.dict_row) as cursor:
                     # 1. Try to find the target by domain
                     cursor.execute(
-                        "SELECT id FROM targets WHERE domain = %s",
-                        (target_url,)
+                        "SELECT id, is_verified FROM targets WHERE domain = %s",
+                        (domain,)
                     )
                     target = cursor.fetchone()
+                    self._logger.info("QUERY_RESULT: target=%s", target)
 
                     if target:
-                        self._logger.info("TARGET_FOUND: domain=%s id=%s", target_url, target['id'])
+                        self._logger.info("TARGET_FOUND: domain=%s id=%s is_verified=%s", domain, target['id'], target.get('is_verified'))
                         return str(target['id'])
 
-                    # 2. If not found, INSERT it immediately
+                    # 2. If not found, INSERT it with is_verified=True (user just registered and provided consent)
                     # Include user_id as it's NOT NULL in the schema
                     # The 'RETURNING id' ensures we get the new UUID back
+                    self._logger.info("TARGET_NOT_FOUND: inserting domain=%s user_id=%s", domain, user_id)
                     cursor.execute(
-                        "INSERT INTO targets (domain, user_id, created_at) VALUES (%s, %s, NOW()) RETURNING id",
-                        (target_url, user_id)
+                        "INSERT INTO targets (domain, user_id, is_verified, created_at) VALUES (%s, %s, true, NOW()) RETURNING id",
+                        (domain, user_id)
                     )
                     new_target = cursor.fetchone()
                     conn.commit()
-                    
+                    self._logger.info("INSERT_RESULT: new_target=%s", new_target)
+
                     if new_target:
-                        self._logger.info("TARGET_CREATED: domain=%s user_id=%s id=%s", target_url, user_id, new_target['id'])
+                        self._logger.info("TARGET_CREATED_AND_VERIFIED: domain=%s user_id=%s id=%s", domain, user_id, new_target['id'])
                         return str(new_target['id'])
-                    
-                    raise Exception(f"Failed to create target for domain: {target_url}")
+
+                    raise Exception(f"Failed to create target for domain: {domain}")
         except Exception as error:
-            self._logger.error("Get or create target failed for domain=%s user_id=%s: %s", target_url, user_id, str(error))
+            self._logger.error("Get or create target failed for domain=%s user_id=%s: %s", domain, user_id, str(error))
             raise
 
     def fetch_vulnerabilities(self, scan_id: str, user_id: str) -> list[Dict[str, Any]]:
