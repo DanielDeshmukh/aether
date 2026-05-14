@@ -18,33 +18,23 @@ class IntentRouter:
     """
     Deterministic schema-based routing of scan intents.
     Determines the best orchestrator and configuration for a given scan intent.
+    Actual consent/verification is handled by enforce_target_verification in main.py.
     """
     def __init__(self, allowed_hosts: Optional[Iterable[str]] = None):
+        # Keep for backward compatibility but don't enforce restrictions
         if allowed_hosts is None:
-            self.allowed_hosts = {"localhost", "127.0.0.1"}
+            self.allowed_hosts = set()
         else:
             self.allowed_hosts = {host.strip().lower() for host in allowed_hosts if host and host.strip()}
 
     def route(self, intent: ScanIntent) -> IntentRoutingVerdict:
-        from urllib.parse import urlparse
-        parsed = urlparse(intent.target_url if "://" in intent.target_url else f"http://{intent.target_url}")
-        host = (parsed.hostname or "").lower()
-
-        # Rule 1: Active validation is ONLY for allowed/verified hosts
+        # Rule: Active/deep validation → attack_orchestrator (consent verified separately)
         if intent.mode == "active_validation" or (intent.mode == "auto" and intent.depth == "deep"):
-            if host in self.allowed_hosts:
-                return IntentRoutingVerdict(
-                    orchestrator="attack_orchestrator",
-                    reason="Target is in allowlist and deep validation requested.",
-                    config={"mode": "full_active"}
-                )
-            else:
-                logger.warning(f"Restricting deep intent for non-allowlisted host: {host}")
-                return IntentRoutingVerdict(
-                    orchestrator="brain",
-                    reason="Target NOT in allowlist. Degrading to passive heuristic mode.",
-                    config={"mode": "heuristic_only"}
-                )
+            return IntentRoutingVerdict(
+                orchestrator="attack_orchestrator",
+                reason="Active validation requested - consent verified by domain verification.",
+                config={"mode": "full_active"}
+            )
 
         # Default to standard brain orchestrator
         return IntentRoutingVerdict(

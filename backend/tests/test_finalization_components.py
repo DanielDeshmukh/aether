@@ -15,26 +15,26 @@ def test_aether_shield_token_generation_and_verification():
     assert AetherShield.verify_token("wrong-token", scan_id, user_id) is False
 
 def test_intent_router_logic():
-    router = IntentRouter(allowed_hosts={"Lab.Local", " 127.0.0.1 "})
+    # Allowed hosts kept for backward compat but not enforced
+    router = IntentRouter(allowed_hosts={"lab.local", "127.0.0.1"})
     assert "lab.local" in router.allowed_hosts
-    assert "127.0.0.1" in router.allowed_hosts
 
-    # Heuristic intent
+    # Heuristic intent → brain
     intent = ScanIntent(target_url="https://example.com", mode="heuristic")
     verdict = router.route(intent)
     assert verdict.orchestrator == "brain"
 
-    # Active validation on non-allowlisted host
+    # Active validation on any domain → attack_orchestrator
+    # (consent verified by domain verification, not allowlist)
     intent = ScanIntent(target_url="https://example.com", mode="active_validation")
     verdict = router.route(intent)
-    assert verdict.orchestrator == "brain"  # Degraded
-    assert "NOT in allowlist" in verdict.reason
+    assert verdict.orchestrator == "attack_orchestrator"
+    assert "consent verified" in verdict.reason.lower()
 
-    # Active validation on allowlisted host
-    intent = ScanIntent(target_url="https://lab.local", mode="active_validation")
+    # Deep auto intent → attack_orchestrator
+    intent = ScanIntent(target_url="https://any-domain.com", mode="auto", depth="deep")
     verdict = router.route(intent)
     assert verdict.orchestrator == "attack_orchestrator"
-    assert "in allowlist" in verdict.reason
 
 @pytest.mark.asyncio
 async def test_heuristic_engine_structure():
