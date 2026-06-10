@@ -17,6 +17,8 @@ HEADER_FIXES = {
             "apache": {"language": "apache", "code": 'Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"'},
             "node": {"language": "javascript", "code": "const helmet = require('helmet');\napp.use(helmet.hsts({ maxAge: 31536000, includeSubDomains: true }));"},
             "python": {"language": "python", "code": "# Django settings.py\nSECURE_HSTS_SECONDS = 31536000\nSECURE_HSTS_INCLUDE_SUBDOMAINS = True\nSECURE_HSTS_PRELOAD = True"},
+            "cloudfront": {"language": "yaml", "code": "# AWS CloudFront response headers policy\nType: AWS::CloudFront::ResponseHeadersPolicy\nProperties:\n  ResponseHeadersPolicyConfig:\n    Name: HSTS-Policy\n    CustomHeadersConfig:\n      Items:\n        - Header: Strict-Transport-Security\n          Value: max-age=31536000; includeSubDomains\n          Override: true"},
+            "cloudflare": {"language": "javascript", "code": "// Cloudflare Workers\naddEventListener('fetch', event => {\n  event.respondWith(handleRequest(event.request));\n});\n\nasync function handleRequest(request) {\n  const response = await fetch(request);\n  const newHeaders = new Headers(response.headers);\n  newHeaders.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');\n  return new Response(response.body, { headers: newHeaders });\n}"},
         },
         "code": 'add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;',
     },
@@ -27,6 +29,7 @@ HEADER_FIXES = {
             "nginx": {"language": "nginx", "code": 'add_header Content-Security-Policy "default-src \'self\'; object-src \'none\'; frame-ancestors \'none\'; base-uri \'self\';" always;'},
             "apache": {"language": "apache", "code": "Header always set Content-Security-Policy \"default-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self';\""},
             "node": {"language": "javascript", "code": "const helmet = require('helmet');\napp.use(helmet.contentSecurityPolicy({ directives: { defaultSrc: [\"'self\"], objectSrc: [\"'none\"], frameAncestors: [\"'none\"] } }));"},
+            "cloudfront": {"language": "yaml", "code": "# AWS CloudFront response headers policy\nType: AWS::CloudFront::ResponseHeadersPolicy\nProperties:\n  ResponseHeadersPolicyConfig:\n    Name: CSP-Policy\n    CustomHeadersConfig:\n      Items:\n        - Header: Content-Security-Policy\n          Value: default-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self';\n          Override: true"},
         },
         "code": 'add_header Content-Security-Policy "default-src \'self\'; object-src \'none\'; frame-ancestors \'none\'; base-uri \'self\';" always;',
     },
@@ -37,6 +40,7 @@ HEADER_FIXES = {
             "nginx": {"language": "nginx", "code": 'add_header X-Frame-Options "DENY" always;'},
             "apache": {"language": "apache", "code": 'Header always set X-Frame-Options "DENY"'},
             "node": {"language": "javascript", "code": "const helmet = require('helmet');\napp.use(helmet.frameguard({ action: 'deny' }));"},
+            "cloudfront": {"language": "yaml", "code": "# AWS CloudFront response headers policy\nType: AWS::CloudFront::ResponseHeadersPolicy\nProperties:\n  ResponseHeadersPolicyConfig:\n    Name: XFrameOptions-Policy\n    CustomHeadersConfig:\n      Items:\n        - Header: X-Frame-Options\n          Value: DENY\n          Override: true"},
         },
         "code": 'add_header X-Frame-Options "DENY" always;',
     },
@@ -47,6 +51,7 @@ HEADER_FIXES = {
             "nginx": {"language": "nginx", "code": 'add_header X-Content-Type-Options "nosniff" always;'},
             "apache": {"language": "apache", "code": 'Header always set X-Content-Type-Options "nosniff"'},
             "node": {"language": "javascript", "code": "const helmet = require('helmet');\napp.use(helmet.noSniff());"},
+            "cloudfront": {"language": "yaml", "code": "# AWS CloudFront response headers policy\nType: AWS::CloudFront::ResponseHeadersPolicy\nProperties:\n  ResponseHeadersPolicyConfig:\n    Name: NoSniff-Policy\n    CustomHeadersConfig:\n      Items:\n        - Header: X-Content-Type-Options\n          Value: nosniff\n          Override: true"},
         },
         "code": 'add_header X-Content-Type-Options "nosniff" always;',
     },
@@ -57,8 +62,45 @@ HEADER_FIXES = {
             "nginx": {"language": "nginx", "code": 'add_header Referrer-Policy "strict-origin-when-cross-origin" always;'},
             "apache": {"language": "apache", "code": 'Header always set Referrer-Policy "strict-origin-when-cross-origin"'},
             "node": {"language": "javascript", "code": "const helmet = require('helmet');\napp.use(helmet.referrerPolicy({ policy: 'strict-origin-when-cross-origin' }));"},
+            "cloudfront": {"language": "yaml", "code": "# AWS CloudFront response headers policy\nType: AWS::CloudFront::ResponseHeadersPolicy\nProperties:\n  ResponseHeadersPolicyConfig:\n    Name: ReferrerPolicy\n    CustomHeadersConfig:\n      Items:\n        - Header: Referrer-Policy\n          Value: strict-origin-when-cross-origin\n          Override: true"},
         },
         "code": 'add_header Referrer-Policy "strict-origin-when-cross-origin" always;',
+    },
+}
+
+# Docker/Kubernetes security context templates
+DOCKER_K8S_TEMPLATES = {
+    "read_only_root_fs": {
+        "title": "Read-only root filesystem",
+        "docker": "docker run --read-only ...",
+        "kubernetes": """securityContext:
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false""",
+    },
+    "non_root_user": {
+        "title": "Run as non-root user",
+        "docker": "docker run --user 1000:1000 ...",
+        "kubernetes": """securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000""",
+    },
+    "drop_capabilities": {
+        "title": "Drop Linux capabilities",
+        "docker": "docker run --cap-drop=ALL --cap-add=NET_BIND_SERVICE ...",
+        "kubernetes": """securityContext:
+  capabilities:
+    drop:
+      - ALL
+    add:
+      - NET_BIND_SERVICE""",
+    },
+    "seccomp_profile": {
+        "title": "Seccomp profile",
+        "docker": "docker run --security-opt seccomp=default ...",
+        "kubernetes": """securityContext:
+  seccompProfile:
+    type: RuntimeDefault""",
     },
 }
 

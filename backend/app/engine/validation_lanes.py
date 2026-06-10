@@ -284,7 +284,7 @@ class ValidationLaneManager:
         if is_https and hostname:
             try:
                 loop = asyncio.get_event_loop()
-                ssl_ok = await loop.run_in_executor(None, self._check_tls_version, hostname, 443)
+                ssl_ok, cert_expiry = await loop.run_in_executor(None, self._check_tls_version_and_cert, hostname, 443)
                 if not ssl_ok:
                     findings.append(LaneFinding(
                         category="A02:2021-Cryptographic Failures",
@@ -296,6 +296,35 @@ class ValidationLaneManager:
                         provided_solution="Disable TLS 1.0/1.1 and enforce TLS 1.2+ only.",
                         evidence={"hostname": hostname},
                     ))
+                if cert_expiry:
+                    from datetime import datetime, timezone
+                    try:
+                        expiry_dt = datetime.fromisoformat(cert_expiry.replace("Z", "+00:00"))
+                        days_left = (expiry_dt - datetime.now(timezone.utc)).days
+                        if days_left < 0:
+                            findings.append(LaneFinding(
+                                category="A02:2021-Cryptographic Failures",
+                                title="Expired SSL/TLS Certificate",
+                                severity="Critical",
+                                detail=f"SSL certificate for {hostname} expired {abs(days_left)} days ago.",
+                                attack_vector="Certificate validity check",
+                                evidence_snippet=f"Certificate expired on {cert_expiry}",
+                                provided_solution="Renew the SSL/TLS certificate immediately.",
+                                evidence={"hostname": hostname, "expiry": cert_expiry, "days_expired": abs(days_left)},
+                            ))
+                        elif days_left < 30:
+                            findings.append(LaneFinding(
+                                category="A02:2021-Cryptographic Failures",
+                                title="SSL/TLS Certificate Expiring Soon",
+                                severity="Medium",
+                                detail=f"SSL certificate for {hostname} expires in {days_left} days.",
+                                attack_vector="Certificate validity check",
+                                evidence_snippet=f"Certificate expires on {cert_expiry}",
+                                provided_solution="Renew the SSL/TLS certificate before expiration.",
+                                evidence={"hostname": hostname, "expiry": cert_expiry, "days_remaining": days_left},
+                            ))
+                    except Exception:
+                        pass
             except Exception:
                 pass
 
@@ -341,25 +370,54 @@ class ValidationLaneManager:
                             evidence={"insecure_flags": insecure_flags, "cookie_excerpt": set_cookie[:300]},
                         ))
 
+                # Check for mixed content (HTTPS page loading HTTP resources)
+                if is_https:
+                    try:
+                        body_text = await page.content()
+                        http_resources = re.findall(r'(?:src|href|action)=["\']http://[^"\']+["\']', body_text, re.IGNORECASE)
+                        if http_resources:
+                            findings.append(LaneFinding(
+                                category="A02:2021-Cryptographic Failures",
+                                title="Mixed Content Detected",
+                                severity="Medium",
+                                detail=f"HTTPS page loads {len(http_resources)} resource(s) over insecure HTTP.",
+                                attack_vector="Mixed content analysis",
+                                evidence_snippet=http_resources[0][:200],
+                                provided_solution="Load all resources over HTTPS or use protocol-relative URLs.",
+                                evidence={"http_resources": [r[:150] for r in http_resources[:5]]},
+                            ))
+                    except Exception:
+                        pass
+
             await self.trace_writer("analyze", "LAMBO-DARK CRYPTO FAILURES LANE COMPLETED.")
         finally:
             await page.close()
 
         return findings
 
-    def _check_tls_version(self, hostname: str, port: int) -> bool:
+    def _check_tls_version_and_cert(self, hostname: str, port: int) -> tuple[bool, str | None]:
+        """Check TLS version and certificate expiry.
+        
+        Returns:
+            Tuple of (tls_ok, cert_expiry_date_string)
+        """
         ctx = ssl.create_default_context()
         sock = socket.create_connection((hostname, port), timeout=5)
+        cert_expiry = None
+        tls_ok = True
         try:
             with ctx.wrap_socket(sock, server_hostname=hostname) as s:
                 ver = s.version()
                 if ver and ("TLSv1" in ver or "TLSv1.1" in ver):
-                    return False
+                    tls_ok = False
+                cert = s.getpeercert()
+                if cert and "notAfter" in cert:
+                    cert_expiry = cert["notAfter"]
         except Exception:
             pass
         finally:
             sock.close()
-        return True
+        return tls_ok, cert_expiry
 
     async def run_insecure_design_lane(self, context: BrowserContext, target_url: str) -> List[LaneFinding]:
         await self._require_verified_target(target_url)
@@ -390,6 +448,52 @@ class ValidationLaneManager:
                                 evidence={"path": path, "status": doc_resp.status},
                             ))
                             break
+                except Exception:
+                    continue
+
+            # Check for missing rate limiting on sensitive endpoints
+            sensitive_endpoints = ["/login", "/signin", "/api/auth", "/api/login", "/api/signup"]
+            for endpoint in sensitive_endpoints:
+                try:
+                    test_url = base + endpoint
+                    resp = await page.goto(test_url, wait_until="domcontentloaded", timeout=5000)
+                    if resp and resp.status in [200, 302, 404]:
+                        # Check for rate limit headers
+                        resp_headers = await resp.all_headers() if resp else {}
+                        has_rate_limit = any("ratelimit" in k.lower() or "retry-after" in k.lower() for k in resp_headers)
+                        if not has_rate_limit:
+                            findings.append(LaneFinding(
+                                category="A04:2021-Insecure Design",
+                                title="Missing Rate Limiting on Sensitive Endpoint",
+                                severity="Medium",
+                                detail=f"Endpoint {endpoint} does not appear to have rate limiting protection.",
+                                attack_vector="Rate limit header analysis",
+                                evidence_snippet=f"GET {endpoint} returned {resp.status} without rate limit headers.",
+                                provided_solution="Implement rate limiting on authentication endpoints to prevent brute-force attacks.",
+                                evidence={"endpoint": endpoint, "status": resp.status, "headers": list(resp_headers.keys())[:10]},
+                            ))
+                            break
+                except Exception:
+                    continue
+
+            # Check for open redirect via query parameter manipulation
+            redirect_params = ["url", "redirect", "next", "return", "continue"]
+            for param in redirect_params:
+                try:
+                    redirect_url = f"{target_url}?{param}=https://evil.com"
+                    resp = await page.goto(redirect_url, wait_until="domcontentloaded", timeout=5000)
+                    if resp and resp.url and "evil.com" in resp.url:
+                        findings.append(LaneFinding(
+                            category="A04:2021-Insecure Design",
+                            title="Open Redirect Vulnerability",
+                            severity="High",
+                            detail=f"Application redirects to external URL via {param} parameter.",
+                            attack_vector="Open redirect test",
+                            evidence_snippet=f"Redirected to: {resp.url}",
+                            provided_solution="Validate and whitelist redirect URLs; never redirect to untrusted domains.",
+                            evidence={"param": param, "redirect_url": resp.url},
+                        ))
+                        break
                 except Exception:
                     continue
 
@@ -490,6 +594,60 @@ class ValidationLaneManager:
                 except Exception:
                     continue
 
+            # Check for unnecessary HTTP methods (TRACE, OPTIONS leaking info)
+            try:
+                trace_resp = await page.goto(target_url, wait_until="domcontentloaded", timeout=5000)
+                # Try OPTIONS request to check allowed methods
+                options_headers = {"Access-Control-Request-Method": "TRACE"}
+                options_resp = await page.evaluate("""
+                    async () => {
+                        try {
+                            const resp = await fetch(window.location.href, { method: 'OPTIONS' });
+                            return { status: resp.status, headers: Object.fromEntries(resp.headers) };
+                        } catch(e) { return null; }
+                    }
+                """)
+                if options_resp and options_resp.get("headers", {}).get("allow", ""):
+                    allowed_methods = options_resp["headers"]["allow"]
+                    dangerous_methods = ["TRACE", "DEBUG", "CONNECT"]
+                    for method in dangerous_methods:
+                        if method in allowed_methods.upper():
+                            findings.append(LaneFinding(
+                                category="A05:2021-Security Misconfiguration",
+                                title=f"Dangerous HTTP Method Allowed: {method}",
+                                severity="Medium" if method == "TRACE" else "High",
+                                detail=f"Server allows {method} method which can be exploited.",
+                                attack_vector="HTTP method enumeration",
+                                evidence_snippet=f"Allowed methods: {allowed_methods}",
+                                provided_solution=f"Disable {method} method on the web server.",
+                                evidence={"allowed_methods": allowed_methods, "dangerous_method": method},
+                            ))
+            except Exception:
+                pass
+
+            # Check for default credentials on known admin panels
+            admin_paths = ["/admin", "/admin/login", "/wp-admin", "/phpmyadmin"]
+            for admin_path in admin_paths:
+                try:
+                    admin_resp = await page.goto(base + admin_path, wait_until="domcontentloaded", timeout=5000)
+                    if admin_resp and admin_resp.status == 200:
+                        body = await page.content()
+                        login_indicators = ["login", "password", "username", "sign in"]
+                        if any(ind in body.lower() for ind in login_indicators):
+                            findings.append(LaneFinding(
+                                category="A05:2021-Security Misconfiguration",
+                                title="Admin Panel Accessible",
+                                severity="Medium",
+                                detail=f"Admin panel is accessible at {admin_path}.",
+                                attack_vector="Admin panel enumeration",
+                                evidence_snippet=f"GET {admin_path} returned login form.",
+                                provided_solution="Restrict admin panel access to internal networks or VPN.",
+                                evidence={"path": admin_path, "status": admin_resp.status},
+                            ))
+                            break
+                except Exception:
+                    continue
+
             await self.trace_writer("analyze", "LAMBO-DARK MISCONFIGURATION LANE COMPLETED.")
         finally:
             await page.close()
@@ -546,6 +704,28 @@ class ValidationLaneManager:
                             evidence={"library": lib_name, "version": version, "src": src[:300]},
                         ))
 
+            # Check for SourceMap files that may expose source code
+            for src in script_srcs:
+                if src.endswith(".js"):
+                    sourcemap_url = src + ".map"
+                    try:
+                        sm_resp = await page.goto(sourcemap_url, wait_until="domcontentloaded", timeout=3000)
+                        if sm_resp and sm_resp.status == 200:
+                            sm_body = await sm_resp.text()
+                            if '"sources"' in sm_body or '"mappings"' in sm_body:
+                                findings.append(LaneFinding(
+                                    category="A06:2021-Vulnerable and Outdated Components",
+                                    title="SourceMap File Exposed",
+                                    severity="Low",
+                                    detail=f"SourceMap file accessible at {sourcemap_url}",
+                                    attack_vector="SourceMap file enumeration",
+                                    evidence_snippet=f"GET {sourcemap_url} returned source map content.",
+                                    provided_solution="Remove SourceMap files from production builds.",
+                                    evidence={"sourcemap_url": sourcemap_url},
+                                ))
+                    except Exception:
+                        pass
+
             await self.trace_writer("analyze", "LAMBO-DARK VULNERABLE COMPONENTS LANE COMPLETED.")
         finally:
             await page.close()
@@ -595,6 +775,45 @@ class ValidationLaneManager:
                         provided_solution="Use generic error messages like 'Invalid email or password' for all login failures.",
                         evidence={"error_patterns_found": True},
                     ))
+
+                # Check for session fixation (session ID changes after login)
+                try:
+                    initial_cookies = await page.evaluate("() => document.cookie")
+                    # Try to submit login form with invalid credentials
+                    login_forms = await page.query_selector_all("form")
+                    for form in login_forms:
+                        action = await form.get_attribute("action") or ""
+                        if any(ind in action.lower() for ind in login_indicators):
+                            # Fill in dummy credentials
+                            await page.evaluate("""
+                                () => {
+                                    const inputs = document.querySelectorAll('input');
+                                    inputs.forEach(input => {
+                                        if (input.type === 'email' || input.type === 'text') {
+                                            input.value = 'test@example.com';
+                                        } else if (input.type === 'password') {
+                                            input.value = 'dummy_password';
+                                        }
+                                    });
+                                }
+                            """)
+                            await page.evaluate("() => document.querySelector('form').submit()")
+                            await page.wait_for_load_state("domcontentloaded", timeout=5000)
+                            post_login_cookies = await page.evaluate("() => document.cookie")
+                            if initial_cookies == post_login_cookies and len(initial_cookies) > 0:
+                                findings.append(LaneFinding(
+                                    category="A07:2021-Identification and Authentication Failures",
+                                    title="Potential Session Fixation",
+                                    severity="Medium",
+                                    detail="Session ID does not change after login attempt.",
+                                    attack_vector="Session fixation test",
+                                    evidence_snippet="Session cookie remained the same after login submission.",
+                                    provided_solution="Regenerate session ID after successful authentication.",
+                                    evidence={"initial_cookies": initial_cookies[:100], "post_login_cookies": post_login_cookies[:100]},
+                                ))
+                            break
+                except Exception:
+                    pass
 
             await self.trace_writer("analyze", "LAMBO-DARK AUTH FAILURES LANE COMPLETED.")
         finally:
@@ -646,6 +865,30 @@ class ValidationLaneManager:
                     provided_solution="Load all JavaScript resources over HTTPS.",
                     evidence={"http_scripts": [s[:200] for s in http_scripts[:5]]},
                 ))
+
+            # Check for CI/CD pipeline files exposed
+            cicd_paths = ["/.github", "/.gitlab-ci.yml", "/Jenkinsfile", "/.circleci", "/.travis.yml"]
+            parsed = urlparse(target_url)
+            base = f"{parsed.scheme}://{parsed.netloc}"
+            for path in cicd_paths:
+                try:
+                    cicd_resp = await page.goto(base + path, wait_until="domcontentloaded", timeout=3000)
+                    if cicd_resp and cicd_resp.status == 200:
+                        body = await page.content()
+                        if any(kw in body.lower() for kw in ["pipeline", "stages", "build", "deploy"]):
+                            findings.append(LaneFinding(
+                                category="A08:2021-Software and Data Integrity Failures",
+                                title="CI/CD Pipeline Configuration Exposed",
+                                severity="Medium",
+                                detail=f"CI/CD configuration file accessible at {path}.",
+                                attack_vector="CI/CD file enumeration",
+                                evidence_snippet=f"GET {path} returned CI/CD configuration.",
+                                provided_solution="Restrict access to CI/CD configuration files.",
+                                evidence={"path": path, "status": cicd_resp.status},
+                            ))
+                            break
+                except Exception:
+                    continue
 
             await self.trace_writer("analyze", "LAMBO-DARK DATA INTEGRITY LANE COMPLETED.")
         finally:
@@ -710,6 +953,21 @@ class ValidationLaneManager:
                     evidence={"status": status, "body_excerpt": body_text[:500]},
                 ))
 
+            # Check for debug mode indicators
+            debug_indicators = ["debug=true", "debug_mode", "x-debug", "x-debug-token"]
+            has_debug = any(ind in body_text.lower() or ind in str(headers).lower() for ind in debug_indicators)
+            if has_debug:
+                findings.append(LaneFinding(
+                    category="A09:2021-Security Logging and Monitoring Failures",
+                    title="Debug Mode Enabled in Production",
+                    severity="Medium",
+                    detail="Application appears to have debug mode enabled.",
+                    attack_vector="Debug mode detection",
+                    evidence_snippet="Debug indicators found in response.",
+                    provided_solution="Disable debug mode in production environments.",
+                    evidence={"debug_indicators_found": True},
+                ))
+
             await self.trace_writer("analyze", "LAMBO-DARK LOGGING FAILURES LANE COMPLETED.")
         finally:
             await page.close()
@@ -725,6 +983,8 @@ class ValidationLaneManager:
             {"label": "private_10", "url": "http://10.0.0.1", "desc": "Private 10.x range"},
             {"label": "private_192", "url": "http://192.168.1.1", "desc": "Private 192.168.x range"},
             {"label": "link_local", "url": "http://169.254.169.254", "desc": "Cloud metadata endpoint"},
+            {"label": "file_protocol", "url": "file:///etc/passwd", "desc": "File protocol handler"},
+            {"label": "gopher_protocol", "url": "gopher://127.0.0.1:25/", "desc": "Gopher protocol handler"},
         ]
         page = await context.new_page()
         try:
@@ -736,7 +996,7 @@ class ValidationLaneManager:
                     resp = await page.goto(test_url, wait_until="domcontentloaded", timeout=8000)
                     if resp and resp.status == 200:
                         body = await page.content()
-                        if payload["url"] not in body and any(kw in body.lower() for kw in ["root:", "metadata", "ami-id", "127.0.0"]):
+                        if payload["url"] not in body and any(kw in body.lower() for kw in ["root:", "metadata", "ami-id", "127.0.0", "root:x"]):
                             artifact = await self.screenshot_capture(
                                 page,
                                 lane_name="ssrf",
@@ -745,12 +1005,41 @@ class ValidationLaneManager:
                             findings.append(LaneFinding(
                                 category="A10:2021-Server-Side Request Forgery",
                                 title=f"SSRF via {payload['desc']}",
-                                severity="Critical" if "169.254" in payload["url"] else "High",
+                                severity="Critical" if "169.254" in payload["url"] or "file" in payload["url"] else "High",
                                 detail=f"Application fetches internal resource at {payload['desc']} ({payload['url']}).",
                                 attack_vector=f"Playwright SSRF probe: {payload['label']}",
                                 evidence_snippet=f"Target followed redirect to {payload['url']}.",
-                                provided_solution="Validate and whitelist URLs before fetching; block internal IP ranges.",
+                                provided_solution="Validate and whitelist URLs before fetching; block internal IP ranges and protocol handlers.",
                                 evidence={"payload": payload, "artifact": artifact},
+                            ))
+                            break
+                except Exception:
+                    continue
+
+            # Test with different user agents to detect user-agent based filtering
+            user_agents = [
+                {"name": "Googlebot", "ua": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"},
+                {"name": "Internal", "ua": "Mozilla/5.0 (Internal)"},
+            ]
+            for ua_info in user_agents:
+                try:
+                    await self._require_verified_target(target_url)
+                    await self._throttle()
+                    test_url = f"{target_url}?url=http://169.254.169.254" if "?" not in target_url else f"{target_url}&url=http://169.254.169.254"
+                    await page.set_extra_http_headers({"User-Agent": ua_info["ua"]})
+                    resp = await page.goto(test_url, wait_until="domcontentloaded", timeout=8000)
+                    if resp and resp.status == 200:
+                        body = await page.content()
+                        if any(kw in body.lower() for kw in ["ami-id", "metadata", "instance-id"]):
+                            findings.append(LaneFinding(
+                                category="A10:2021-Server-Side Request Forgery",
+                                title=f"SSRF via User-Agent Bypass ({ua_info['name']})",
+                                severity="Critical",
+                                detail=f"SSRF protection bypassed using {ua_info['name']} user agent.",
+                                attack_vector="User-Agent based SSRF bypass",
+                                evidence_snippet=f"SSRF successful with User-Agent: {ua_info['ua'][:100]}",
+                                provided_solution="Do not rely on User-Agent filtering for SSRF protection.",
+                                evidence={"user_agent": ua_info["name"], "ua_string": ua_info["ua"]},
                             ))
                             break
                 except Exception:
