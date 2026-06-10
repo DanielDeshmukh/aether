@@ -98,3 +98,141 @@ AETHER is structured as a modular SaaS platform designed for high-concurrency te
 - [x] Replaced legacy scan persistence path with transactional `persist_full_pipeline`.
 - [x] Hardened orchestration timeout handling for upstream AI overload scenarios.
 
+---
+
+## Setup Instructions
+
+### Prerequisites
+
+- Python 3.11+
+- Node.js 18+
+- PostgreSQL 14+
+- Docker (optional)
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/your-org/aether.git
+cd aether
+```
+
+### 2. Backend Setup
+
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# or
+venv\Scripts\activate  # Windows
+
+pip install -r requirements.txt
+```
+
+### 3. Database Setup
+
+```bash
+# Create PostgreSQL database
+createdb aether
+
+# Set DATABASE_URL in .env
+echo "DATABASE_URL=postgresql://user:password@localhost:5432/aether" >> .env
+
+# Run migrations
+alembic upgrade head
+```
+
+### 4. Google Cloud Console Setup (OAuth)
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select existing
+3. Enable Google+ API
+4. Go to Credentials > Create Credentials > OAuth 2.0 Client ID
+5. Set authorized redirect URIs to `http://localhost:8080/api/v1/auth/google/callback`
+6. Copy Client ID and Client Secret to `.env`
+
+### 5. SMTP Configuration (Email)
+
+```bash
+# Required for magic links and report delivery
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+SMTP_FROM=AETHER <noreply@aether.local>
+```
+
+### 6. JWT Secret Generation
+
+```bash
+# Generate a secure random secret
+python -c "import secrets; print(secrets.token_urlsafe(64))"
+
+# Add to .env
+echo "AETHER_JWT_SECRET=your-generated-secret" >> .env
+```
+
+### 7. Frontend Setup
+
+```bash
+cd frontend
+npm install
+```
+
+### 8. Environment Variables
+
+Copy the example environment file and fill in your values:
+
+```bash
+cp .env.example .env
+```
+
+See `.env.example` for all required variables.
+
+### 9. Running Development Servers
+
+```bash
+# Terminal 1 - Backend
+cd backend
+uvicorn main:app --reload --port 8000
+
+# Terminal 2 - Frontend
+cd frontend
+npm run dev
+```
+
+### 10. Docker Setup (Optional)
+
+```bash
+docker-compose up -d
+```
+
+---
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `AETHER_JWT_SECRET` | Yes | JWT signing secret |
+| `GEMINI_API_KEY` | No | Google Gemini API key for AI analysis |
+| `GOOGLE_CLIENT_ID` | No | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | No | Google OAuth client secret |
+| `SMTP_HOST` | No | SMTP server host |
+| `SMTP_PORT` | No | SMTP server port |
+| `SMTP_USER` | No | SMTP username |
+| `SMTP_PASSWORD` | No | SMTP password |
+| `FRONTEND_URL` | Yes | Frontend URL for CORS |
+| `ENVIRONMENT` | No | `development` or `production` |
+
+---
+
+## API Documentation
+
+See [docs/api.md](docs/api.md) for complete API documentation.
+
+---
+
+## Architecture
+
+See [docs/architecture.md](docs/architecture.md) for system architecture details.
+

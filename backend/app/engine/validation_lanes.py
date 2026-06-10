@@ -17,6 +17,9 @@ except ImportError:  # pragma: no cover - resolved when requirements are install
     Page = Any  # type: ignore[assignment]
 
 
+# SQL error patterns used to detect successful SQL injection attacks.
+# These regex patterns match common database error messages that leak
+# information when input is not properly sanitized.
 SQL_ERROR_PATTERNS = [
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
@@ -30,11 +33,20 @@ SQL_ERROR_PATTERNS = [
         r"syntax error at or near",
     )
 ]
+
+# XSS probe markers - safe payloads injected to test for reflected XSS.
+# The marker prefix is unique to AETHER to avoid false positives from
+# existing content on the target page.
 SAFE_XSS_MARKER_PREFIX = "AETHER_XSS_PROBE"
 SAFE_XSS_PAYLOAD_TEMPLATE = '<div data-aether-marker="{marker}">{marker}</div>'
+
+# SQLi test payloads - classic injection patterns that trigger database
+# errors when input is not properly parameterized.
 SAFE_INJECTION_PAYLOADS = ["' OR '1'='1", "'; WAITFOR DELAY '0:0:03' --"]
 
 
+# Represents a single security finding discovered by a validation lane.
+# Each finding includes evidence, severity, and actionable remediation guidance.
 @dataclass
 class LaneFinding:
     category: str

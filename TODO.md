@@ -1,6 +1,6 @@
 # AETHER — Complete Task Checklist
 > A comprehensive list of every pending item to bring AETHER from current state to 100% production-ready.
-> Current estimated completion: **~91%** (116 of 128 items done)
+> Current estimated completion: **~95%** (121 of 128 items done)
 > Last audited: 2026-06-10
 
 ---
@@ -525,23 +525,23 @@
 
 > Documentation and configuration accuracy.
 
-- [ ] **Update `architecture.md`** — Remove any remaining Supabase references. Add new service descriptions (auth.py, email.py, auth_routes.py).
+- [x] **Update `architecture.md`** — Remove any remaining Supabase references. Add new service descriptions (auth.py, email.py, auth_routes.py).
   - File: `docs/architecture.md`
 
-- [ ] **Update API documentation** — Document all new endpoints in a `docs/api.md` or OpenAPI spec.
+- [x] **Update API documentation** — Document all new endpoints in a `docs/api.md` or OpenAPI spec.
   - File: Create `docs/api.md`
 
-- [ ] **Update `README.md` setup instructions** — Add:
-  - [ ] PostgreSQL setup steps
-  - [ ] Google Cloud Console setup for OAuth
-  - [ ] SMTP configuration guide
-  - [ ] `AETHER_JWT_SECRET` generation
+- [x] **Update `README.md` setup instructions** — Add:
+  - [x] PostgreSQL setup steps
+  - [x] Google Cloud Console setup for OAuth
+  - [x] SMTP configuration guide
+  - [x] `AETHER_JWT_SECRET` generation
   - File: `README.md`
 
-- [ ] **Create `.env.example` with all required variables** — Verify all env vars are documented.
+- [x] **Create `.env.example` with all required variables** — Verify all env vars are documented.
   - File: Root `.env.example`, `backend/.env.example`, `frontend/.env.example`
 
-- [ ] **Add inline code comments** for complex business logic (BrainOrchestrator reasoning loop, validation lane architecture).
+- [x] **Add inline code comments** for complex business logic (BrainOrchestrator reasoning loop, validation lane architecture).
   - Files: `backend/app/orchestrator/brain.py`, `backend/app/engine/validation_lanes.py`
 
 ---
@@ -671,10 +671,10 @@
 | P2 — Domain Verification | 3 | 3 | 0 |
 | P3 — Test Suite | 30 | 30 | 0 |
 | P3 — Code Cleanup | 8 | 6 | 2 |
-| P3 — Documentation | 5 | 0 | 5 |
+| P3 — Documentation | 5 | 5 | 0 |
 | P3 — Mobile Audit | 7 | 7 | 0 |
 | P3 — CI/CD | 5 | 0 | 5 |
-| **TOTAL** | **128** | **116** | **12** |
+| **TOTAL** | **128** | **121** | **7** |
 
-> **Current completion: ~91%** (116 of 128 items done - almost there!)
+> **Current completion: ~95%** (121 of 128 items done - nearly complete!)
 > **Estimated effort: < 1 day for a single developer**

@@ -32,6 +32,10 @@ except ImportError:  # pragma: no cover - resolved when requirements are install
     genai = None
 
 logger = logging.getLogger("aether.brain")
+
+# OWASP Top 10 (2021) - The 10 critical web application security risks.
+# Each category maps to validation lanes in validation_lanes.py that execute
+# Playwright-based checks against the target URL.
 OWASP_TOP_10_2021 = [
     "A01:2021-Broken Access Control",
     "A02:2021-Cryptographic Failures",
@@ -44,6 +48,9 @@ OWASP_TOP_10_2021 = [
     "A09:2021-Security Logging and Monitoring Failures",
     "A10:2021-Server-Side Request Forgery",
 ]
+
+# Prescriptive remediation guidance per OWASP category.
+# Used by the AI orchestrator to generate context-specific fix recommendations.
 OWASP_REMEDIATIONS = {
     "A01:2021-Broken Access Control": "Enforce server-side authorization checks on every object and route, and deny access by default.",
     "A02:2021-Cryptographic Failures": "Enforce HTTPS everywhere, set HSTS, and remove mixed-content or weak transport defaults.",
