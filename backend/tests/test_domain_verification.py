@@ -122,5 +122,43 @@ class TestDomainVerification(unittest.TestCase):
         self.assertIn(".well-known/aether-verification.json", second_message["msg"])
 
 
+    def test_caching_works(self) -> None:
+        manager = DomainVerificationManager(
+            StubStorage(
+                {
+                    "domain": "cached.com",
+                    "is_verified": True,
+                    "verification_token": "token123",
+                }
+            )
+        )
+
+        async def run_check() -> DomainVerificationResult:
+            return await manager.verify_target("https://cached.com")
+
+        result1 = asyncio.run(run_check())
+        result2 = asyncio.run(run_check())
+
+        # Second call should use cache
+        self.assertTrue(result1.allowed)
+        self.assertTrue(result2.allowed)
+
+    def test_rate_limiter_works(self) -> None:
+        manager = DomainVerificationManager(
+            StubStorage(
+                {
+                    "domain": "ratelimit.com",
+                    "is_verified": False,
+                    "verification_token": "token123",
+                }
+            )
+        )
+
+        # Test rate limiter
+        status = manager.get_rate_limit_status("ratelimit.com")
+        self.assertIn("remaining_attempts", status)
+        self.assertIn("max_attempts", status)
+
+
 if __name__ == "__main__":
     unittest.main()

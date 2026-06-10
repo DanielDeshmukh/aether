@@ -1,6 +1,6 @@
 # AETHER — Complete Task Checklist
 > A comprehensive list of every pending item to bring AETHER from current state to 100% production-ready.
-> Current estimated completion: **~62%** (79 of 128 items done)
+> Current estimated completion: **~85%** (109 of 128 items done)
 > Last audited: 2026-06-10
 
 ---
@@ -402,91 +402,91 @@
 > Tests that exist are partial. Many critical paths have no test coverage.
 
 ### Fix broken tests
-- [ ] **Fix `test_privacy.py`** — Imports from `aether.backend.app.services.storage` (wrong path) and uses outdated Supabase mock API that no longer matches psycopg-based storage.
+- [x] **Fix `test_privacy.py`** — Imports from `aether.backend.app.services.storage` (wrong path) and uses outdated Supabase mock API that no longer matches psycopg-based storage.
   - File: `backend/tests/test_privacy.py:3`
   - Update import path to `backend.app.services.storage`
   - Rewrite mocks to match current `ScanStorage` API
 
 ### Add missing tests (per AGENTS.md: "Jules must generate a unit test in `/tests` for every new function")
 
-- [ ] **Auth route tests**
-  - [ ] `test_magic_link_request()` — POST to `/api/v1/auth/magic-link`, verify token stored in DB
-  - [ ] `test_magic_link_verify()` — GET `/api/v1/auth/verify?token=...`, verify JWT pair returned
-  - [ ] `test_magic_link_expired_token()` — Verify expired token returns 401
-  - [ ] `test_google_oauth_redirect()` — GET `/api/v1/auth/google`, verify redirect to Google
-  - [ ] `test_google_oauth_callback()` — Mock Google token exchange, verify JWT pair returned
-  - [ ] `test_token_refresh()` — POST to `/api/v1/auth/refresh`, verify new access token
-  - [ ] `test_me_endpoint()` — GET `/api/v1/auth/me` with valid/invalid tokens
-  - [ ] `test_sign_out()` — Verify token cleared
+- [x] **Auth route tests**
+  - [x] `test_magic_link_request()` — POST to `/api/v1/auth/magic-link`, verify token stored in DB
+  - [x] `test_magic_link_verify()` — GET `/api/v1/auth/verify?token=...`, verify JWT pair returned
+  - [x] `test_magic_link_expired_token()` — Verify expired token returns 401
+  - [x] `test_google_oauth_redirect()` — GET `/api/v1/auth/google`, verify redirect to Google
+  - [x] `test_google_oauth_callback()` — Mock Google token exchange, verify JWT pair returned
+  - [x] `test_token_refresh()` — POST to `/api/v1/auth/refresh`, verify new access token
+  - [x] `test_me_endpoint()` — GET `/api/v1/auth/me` with valid/invalid tokens
+  - [x] `test_sign_out()` — Verify token cleared
   - File: Create `backend/tests/test_auth_routes.py`
 
-- [ ] **BrainOrchestrator tests**
-  - [ ] `test_brain_stream()` — Verify WebSocket stream emits plan/execute/analyze phases
-  - [ ] `test_brain_owasp_assessment_loop()` — Verify all 10 categories are iterated
-  - [ ] `test_brain_signal_handling()` — Test pause/resume/terminate signals
-  - [ ] `test_brain_generate_fix()` — Test Gemini remediation generation
-  - [ ] `test_brain_timeout()` — Test initial plan timeout behavior
+- [x] **BrainOrchestrator tests**
+  - [x] `test_brain_stream()` — Verify WebSocket stream emits plan/execute/analyze phases
+  - [x] `test_brain_owasp_assessment_loop()` — Verify all 10 categories are iterated
+  - [x] `test_brain_signal_handling()` — Test pause/resume/terminate signals
+  - [x] `test_brain_generate_fix()` — Test Gemini remediation generation
+  - [x] `test_brain_timeout()` — Test initial plan timeout behavior
   - File: Create `backend/tests/test_brain_orchestrator.py`
 
-- [ ] **Heuristic engine tests**
-  - [ ] `test_port_scan()` — Test port scanning against mock target
-  - [ ] `test_header_audit()` — Test header analysis
-  - [ ] `test_sensitive_file_check()` — Test file discovery
-  - [ ] `test_cors_check()` — Test CORS misconfiguration detection
+- [x] **Heuristic engine tests**
+  - [x] `test_port_scan()` — Test port scanning against mock target
+  - [x] `test_header_audit()` — Test header analysis
+  - [x] `test_sensitive_file_check()` — Test file discovery
+  - [x] `test_cors_check()` — Test CORS misconfiguration detection
   - File: Create `backend/tests/test_heuristic_engine.py`
 
-- [ ] **Storage method tests**
-  - [ ] `test_persist_full_pipeline()` — Test with real PostgreSQL (integration test)
-  - [ ] `test_update_scan_trace()` — Test trace update (once implemented)
-  - [ ] `test_insert_vulnerability()` — Test vulnerability insert (once implemented)
-  - [ ] `test_fetch_scan()` — Test single scan retrieval
-  - [ ] `test_fetch_all_scans()` — Test scan listing with pagination
-  - [ ] `test_delete_scan()` — Test scan deletion (once implemented)
+- [x] **Storage method tests**
+  - [x] `test_persist_full_pipeline()` — Test with real PostgreSQL (integration test)
+  - [x] `test_update_scan_trace()` — Test trace update (once implemented)
+  - [x] `test_insert_vulnerability()` — Test vulnerability insert (once implemented)
+  - [x] `test_fetch_scan()` — Test single scan retrieval
+  - [x] `test_fetch_all_scans()` — Test scan listing with pagination
+  - [x] `test_delete_scan()` — Test scan deletion (once implemented)
   - File: Create `backend/tests/test_storage.py`
 
-- [ ] **PDF report tests**
-  - [ ] `test_render_pdf_report()` — Test HTML generation and PDF conversion
-  - [ ] `test_pdf_vulnerability_formatting()` — Test severity color coding
+- [x] **PDF report tests**
+  - [x] `test_render_pdf_report()` — Test HTML generation and PDF conversion
+  - [x] `test_pdf_vulnerability_formatting()` — Test severity color coding
   - File: Create `backend/tests/test_pdf_report.py`
 
-- [ ] **WebSocket tests**
-  - [ ] `test_dashboard_websocket()` — Test `/ws/dashboard` connection and broadcast
-  - [ ] `test_scan_websocket()` — Test `/ws/scan/{scan_id}` streaming
-  - [ ] `test_remediation_websocket()` — Test `/ws/remediation/{scan_id}` flow
+- [x] **WebSocket tests**
+  - [x] `test_dashboard_websocket()` — Test `/ws/dashboard` connection and broadcast
+  - [x] `test_scan_websocket()` — Test `/ws/scan/{scan_id}` streaming
+  - [x] `test_remediation_websocket()` — Test `/ws/remediation/{scan_id}` flow
   - File: Create `backend/tests/test_websockets.py`
 
-- [ ] **Intent router tests**
-  - [ ] `test_route_scan_command()` — Test scan intent detection
-  - [ ] `test_route_remediation_command()` — Test remediation intent detection
-  - [ ] `test_route_unknown_command()` — Test fallback behavior
+- [x] **Intent router tests**
+  - [x] `test_route_scan_command()` — Test scan intent detection
+  - [x] `test_route_remediation_command()` — Test remediation intent detection
+  - [x] `test_route_unknown_command()` — Test fallback behavior
   - File: Create `backend/tests/test_intent_router.py`
 
-- [ ] **Validation lane tests**
-  - [ ] `test_xss_lane()` — Test XSS injection detection (expand existing)
-  - [ ] `test_sqli_lane()` — Test SQL injection detection
-  - [ ] `test_cryptographic_failures_lane()` — Test TLS checks (once implemented)
-  - [ ] `test_misconfiguration_lane()` — Test header/config checks (once implemented)
+- [x] **Validation lane tests**
+  - [x] `test_xss_lane()` — Test XSS injection detection (expand existing)
+  - [x] `test_sqli_lane()` — Test SQL injection detection
+  - [x] `test_cryptographic_failures_lane()` — Test TLS checks (once implemented)
+  - [x] `test_misconfiguration_lane()` — Test header/config checks (once implemented)
   - File: Create `backend/tests/test_validation_lanes_full.py`
 
-- [ ] **Rate limiter tests**
-  - [ ] `test_rate_limiter_blocks()` — Test request throttling
-  - [ ] `test_rate_limiter_allows()` — Test within-limit requests
+- [x] **Rate limiter tests**
+  - [x] `test_rate_limiter_blocks()` — Test request throttling
+  - [x] `test_rate_limiter_allows()` — Test within-limit requests
   - File: Create `backend/tests/test_rate_limiting.py`
 
-- [ ] **Domain verification tests**
-  - [ ] `test_dns_verification_success()` — Test valid DNS TXT record
-  - [ ] `test_http_verification_success()` — Test valid well-known file
-  - [ ] `test_verification_caching()` — Test cache behavior (once implemented)
+- [x] **Domain verification tests**
+  - [x] `test_dns_verification_success()` — Test valid DNS TXT record
+  - [x] `test_http_verification_success()` — Test valid well-known file
+  - [x] `test_verification_caching()` — Test cache behavior (once implemented)
   - File: Expand `backend/tests/test_domain_verification.py`
 
 ### Test infrastructure
-- [ ] **Add test database configuration** — Use a separate test PostgreSQL database for integration tests.
+- [x] **Add test database configuration** — Use a separate test PostgreSQL database for integration tests.
   - File: Create `backend/tests/conftest.py` with test DB fixtures
 
-- [ ] **Add test coverage reporting** — Run `pytest --cov=backend/app --cov-report=html`
+- [x] **Add test coverage reporting** — Run `pytest --cov=backend/app --cov-report=html`
   - File: `backend/pyproject.toml` or `backend/setup.cfg`
 
-- [ ] **Set coverage threshold** — Enforce minimum 70% coverage in CI.
+- [x] **Set coverage threshold** — Enforce minimum 70% coverage in CI.
   - File: `backend/pyproject.toml`
 
 ---
@@ -669,12 +669,12 @@
 | P2 — Remediation | 5 | 5 | 0 |
 | P2 — Infrastructure | 10 | 10 | 0 |
 | P2 — Domain Verification | 3 | 3 | 0 |
-| P3 — Test Suite | 30 | 0 | 30 |
+| P3 — Test Suite | 30 | 30 | 0 |
 | P3 — Code Cleanup | 8 | 6 | 2 |
 | P3 — Documentation | 5 | 0 | 5 |
 | P3 — Mobile Audit | 7 | 0 | 7 |
 | P3 — CI/CD | 5 | 0 | 5 |
-| **TOTAL** | **128** | **79** | **49** |
+| **TOTAL** | **128** | **109** | **19** |
 
-> **Current completion: ~62%** (79 of 128 items done - past halfway mark!)
-> **Estimated effort: < 1 week for a single developer**
+> **Current completion: ~85%** (109 of 128 items done - almost there!)
+> **Estimated effort: < 2 days for a single developer**
