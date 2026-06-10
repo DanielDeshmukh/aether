@@ -1059,6 +1059,52 @@ async def download_scan_report(scan_id: str, user_id: str = Depends(get_current_
     )
 
 
+class EmailReportRequest(BaseModel):
+    email: str = Field(min_length=5)
+
+
+@app.post("/api/v1/scans/{scan_id}/report/email")
+async def email_scan_report(
+    scan_id: str,
+    payload: EmailReportRequest,
+    user_id: str = Depends(get_current_user),
+):
+    """Send the PDF report via email."""
+    try:
+        scan_storage.ensure_schema()
+    except Exception:
+        logger.exception("Schema sync failed before email report for %s", scan_id)
+        raise HTTPException(status_code=503, detail="DATABASE UNAVAILABLE.")
+
+    record = scan_storage.fetch_scan(scan_id, user_id=user_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="SCAN RECORD NOT FOUND.")
+
+    vulnerabilities = scan_storage.fetch_vulnerabilities(scan_id, user_id=user_id)
+    profiles = scan_storage.fetch_profiles(scan_id, user_id=user_id)
+    pdf_bytes = await render_pdf_report(record, vulnerabilities, profiles)
+    
+    target_url = record.get("target_url", "unknown")
+    threat_level = record.get("threat_level", "unknown")
+    vuln_count = len(vulnerabilities)
+    
+    from app.services.email import send_report_email
+    
+    success = await send_report_email(
+        to_email=payload.email,
+        target_url=target_url,
+        vuln_count=vuln_count,
+        threat_level=threat_level,
+        pdf_bytes=pdf_bytes,
+        scan_id=scan_id,
+    )
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="FAILED TO SEND EMAIL. PLEASE TRY AGAIN.")
+    
+    return {"message": "Report sent successfully", "email": payload.email}
+
+
 @app.websocket("/ws/remediation/{scan_id}")
 async def websocket_remediation(websocket: WebSocket, scan_id: str):
     await websocket.accept()

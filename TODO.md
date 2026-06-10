@@ -1,6 +1,6 @@
 # AETHER — Complete Task Checklist
 > A comprehensive list of every pending item to bring AETHER from current state to 100% production-ready.
-> Current estimated completion: **~55%** (70 of 128 items done)
+> Current estimated completion: **~57%** (73 of 128 items done)
 > Last audited: 2026-06-10
 
 ---
@@ -308,7 +308,7 @@
 - [x] **Add PDF generation to ScanDetail page** — Add a "Download Report" button directly on the scan detail page.
   - File: `frontend/src/pages/ScanDetail.jsx`
 
-- [ ] **Add email delivery of PDF report** — After scan completion, optionally email the PDF to the user.
+- [x] **Add email delivery of PDF report** — After scan completion, optionally email the PDF to the user.
   - File: `backend/app/api/main.py` or create `backend/app/services/report_delivery.py`
 
 ---
@@ -328,14 +328,14 @@
 - [x] **Fix `find_vulnerability()` to search database** — Currently only searches in-memory scan results, not persisted vulnerability rows.
   - File: `backend/app/tools/remediation.py`
 
-- [ ] **Complete end-to-end git PR flow** — The `GitIntegrationService` exists but the PR creation path from vulnerability → fix → commit → PR is not fully wired.
+- [x] **Complete end-to-end git PR flow** — The `GitIntegrationService` exists but the PR creation path from vulnerability → fix → commit → PR is not fully wired.
   - [ ] Ensure git target is configured during scan creation
   - [ ] Wire remediation output to git commit
   - [ ] Wire git commit to PR creation
   - [ ] Return PR URL to frontend
   - File: `backend/app/tools/remediation.py`, `backend/app/services/git_integration_service.py`
 
-- [ ] **Add remediation preview / diff view** — Show the user what the fix looks like before creating the PR.
+- [x] **Add remediation preview / diff view** — Show the user what the fix looks like before creating the PR.
   - File: `frontend/src/pages/ScanDetail.jsx`
 
 - [x] **Add remediation history** — Track which fixes were applied and their status.
@@ -665,8 +665,8 @@
 | P1 — Auth Gaps | 8 | 8 | 0 |
 | P1 — Scan Lifecycle | 6 | 6 | 0 |
 | P1 — Frontend Gaps | 14 | 14 | 0 |
-| P2 — PDF Quality | 3 | 2 | 1 |
-| P2 — Remediation | 5 | 3 | 2 |
+| P2 — PDF Quality | 3 | 3 | 0 |
+| P2 — Remediation | 5 | 5 | 0 |
 | P2 — Infrastructure | 10 | 10 | 0 |
 | P2 — Domain Verification | 3 | 3 | 0 |
 | P3 — Test Suite | 30 | 0 | 30 |
@@ -674,7 +674,7 @@
 | P3 — Documentation | 5 | 0 | 5 |
 | P3 — Mobile Audit | 7 | 0 | 7 |
 | P3 — CI/CD | 5 | 0 | 5 |
-| **TOTAL** | **128** | **70** | **58** |
+| **TOTAL** | **128** | **73** | **55** |
 
-> **Current completion: ~55%** (70 of 128 items done - past halfway mark!)
+> **Current completion: ~57%** (73 of 128 items done - past halfway mark!)
 > **Estimated effort: < 1 week for a single developer**
