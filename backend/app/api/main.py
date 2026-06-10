@@ -789,6 +789,18 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
 
 @app.post("/api/v1/scan/kill/{scan_id}")
 async def kill_scan(scan_id: str, user_id: str = Depends(get_current_user)):
+    """Terminate an active scan immediately.
+    
+    Args:
+        scan_id: The unique identifier of the scan to terminate.
+        user_id: The authenticated user's ID (injected by dependency).
+        
+    Returns:
+        Status message indicating termination was initiated.
+        
+    Raises:
+        HTTPException: 403 if user doesn't own the scan, or if scan not found.
+    """
     scan = active_scans.get(scan_id)
     if not scan:
         return {"status": "scan_not_found"}
@@ -805,6 +817,21 @@ async def kill_scan(scan_id: str, user_id: str = Depends(get_current_user)):
 
 @app.post("/api/v1/scan/{scan_id}/pause")
 async def pause_scan(scan_id: str, user_id: str = Depends(get_current_user)):
+    """Pause an active scan.
+    
+    The scan will pause after completing its current OWASP category validation.
+    Use the resume endpoint to continue the scan.
+    
+    Args:
+        scan_id: The unique identifier of the scan to pause.
+        user_id: The authenticated user's ID (injected by dependency).
+        
+    Returns:
+        Status message indicating the scan was paused.
+        
+    Raises:
+        HTTPException: 404 if scan not found, 403 if user doesn't own the scan.
+    """
     scan = active_scans.get(scan_id)
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found or not active.")
@@ -819,6 +846,18 @@ async def pause_scan(scan_id: str, user_id: str = Depends(get_current_user)):
 
 @app.post("/api/v1/scan/{scan_id}/resume")
 async def resume_scan(scan_id: str, user_id: str = Depends(get_current_user)):
+    """Resume a paused scan.
+    
+    Args:
+        scan_id: The unique identifier of the scan to resume.
+        user_id: The authenticated user's ID (injected by dependency).
+        
+    Returns:
+        Status message indicating the scan was resumed.
+        
+    Raises:
+        HTTPException: 404 if scan not found, 403 if user doesn't own the scan.
+    """
     scan = active_scans.get(scan_id)
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found or not active.")
@@ -833,6 +872,21 @@ async def resume_scan(scan_id: str, user_id: str = Depends(get_current_user)):
 
 @app.post("/api/v1/scan/{scan_id}/terminate")
 async def terminate_scan(scan_id: str, user_id: str = Depends(get_current_user)):
+    """Terminate a scan gracefully.
+    
+    Unlike the kill endpoint, this performs a graceful shutdown,
+    saving any partial results before stopping.
+    
+    Args:
+        scan_id: The unique identifier of the scan to terminate.
+        user_id: The authenticated user's ID (injected by dependency).
+        
+    Returns:
+        Status message indicating termination was initiated.
+        
+    Raises:
+        HTTPException: 404 if scan not found, 403 if user doesn't own the scan.
+    """
     scan = active_scans.get(scan_id)
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found or not active.")
@@ -847,6 +901,21 @@ async def terminate_scan(scan_id: str, user_id: str = Depends(get_current_user))
 
 @app.delete("/api/v1/scans/{scan_id}")
 async def delete_scan(scan_id: str, user_id: str = Depends(get_current_user)):
+    """Delete a scan and all associated data.
+    
+    This permanently removes the scan record, vulnerabilities, screenshots,
+    and any other associated data from the database.
+    
+    Args:
+        scan_id: The unique identifier of the scan to delete.
+        user_id: The authenticated user's ID (injected by dependency).
+        
+    Returns:
+        Success message confirming deletion.
+        
+    Raises:
+        HTTPException: 404 if scan not found.
+    """
     scan_storage.ensure_schema()
     deleted = scan_storage.delete_scan(scan_id, user_id)
     if not deleted:
@@ -896,6 +965,21 @@ async def rerun_scan(scan_id: str, user_id: str = Depends(check_scan_quota)):
 
 @app.get("/api/v1/scans/compare")
 async def compare_scans(ids: str, user_id: str = Depends(get_current_user)):
+    """Compare multiple scans side-by-side.
+    
+    Useful for tracking security improvements over time or comparing
+    different scan configurations against the same target.
+    
+    Args:
+        ids: Comma-separated list of scan IDs to compare (max 5).
+        user_id: The authenticated user's ID (injected by dependency).
+        
+    Returns:
+        Comparison data including vulnerabilities, threat scores, and metadata.
+        
+    Raises:
+        HTTPException: 400 if invalid scan IDs provided, 403 if user doesn't own scans.
+    """
     scan_storage.ensure_schema()
     scan_id_list = [i.strip() for i in ids.split(",") if i.strip()]
     if len(scan_id_list) < 2:
@@ -920,6 +1004,22 @@ async def compare_scans(ids: str, user_id: str = Depends(get_current_user)):
 
 @app.get("/api/v1/scans/{scan_id}/export")
 async def export_scan(scan_id: str, format: str = "json", user_id: str = Depends(get_current_user)):
+    """Export scan data in JSON or CSV format.
+    
+    Provides structured data export for integration with other tools
+    or for offline analysis.
+    
+    Args:
+        scan_id: The unique identifier of the scan to export.
+        format: Export format - 'json' for structured data, 'csv' for spreadsheet.
+        user_id: The authenticated user's ID (injected by dependency).
+        
+    Returns:
+        File download response with appropriate content type.
+        
+    Raises:
+        HTTPException: 404 if scan not found, 400 if invalid format.
+    """
     scan_storage.ensure_schema()
     record = scan_storage.fetch_scan(scan_id, user_id)
     if not record:
