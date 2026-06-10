@@ -1,6 +1,6 @@
 # AETHER — Complete Task Checklist
 > A comprehensive list of every pending item to bring AETHER from current state to 100% production-ready.
-> Current estimated completion: **~67%**
+> Current estimated completion: **~75%**
 > Last audited: 2026-06-10
 
 ---
@@ -101,79 +101,79 @@
 - [x] A03:2021 — Injection — SQLi lane (`validation_lanes.py:159-247`)
 
 ### Missing (implement each)
-- [ ] **A02:2021 — Cryptographic Failures**
-  - [ ] Check for HTTP (non-TLS) endpoints
-  - [ ] Check for weak TLS versions (TLS 1.0/1.1) via `ssl` module
+- [x] **A02:2021 — Cryptographic Failures**
+  - [x] Check for HTTP (non-TLS) endpoints
+  - [x] Check for weak TLS versions (TLS 1.0/1.1) via `ssl` module
   - [ ] Check for certificate expiry and validity
   - [ ] Check for mixed content (HTTPS page loading HTTP resources)
-  - [ ] Check for missing `Strict-Transport-Security` header
-  - [ ] Check for insecure cookie flags (`Secure`, `HttpOnly`, `SameSite`)
-  - File: Create `backend/app/engine/validation_lanes.py` — new `CryptographicFailuresLane` class
+  - [x] Check for missing `Strict-Transport-Security` header
+  - [x] Check for insecure cookie flags (`Secure`, `HttpOnly`, `SameSite`)
+  - File: `backend/app/engine/validation_lanes.py` — new `run_crypto_failures_lane()` method
 
-- [ ] **A04:2021 — Insecure Design**
-  - [ ] Check for exposed API documentation endpoints (`/docs`, `/redoc`, `/swagger`)
-  - [ ] Check for verbose error messages exposing stack traces
+- [x] **A04:2021 — Insecure Design**
+  - [x] Check for exposed API documentation endpoints (`/docs`, `/redoc`, `/swagger`)
+  - [x] Check for verbose error messages exposing stack traces
   - [ ] Check for missing rate limiting on sensitive endpoints (login, signup)
   - [ ] Check for business logic flaws (e.g., price manipulation in request body)
   - [ ] Check for missing resource quotas (file upload size, request count)
-  - File: Create `backend/app/engine/validation_lanes.py` — new `InsecureDesignLane` class
+  - File: `backend/app/engine/validation_lanes.py` — new `run_insecure_design_lane()` method
 
-- [ ] **A05:2021 — Security Misconfiguration**
+- [x] **A05:2021 — Security Misconfiguration**
   - [ ] Check for default credentials on known admin panels
-  - [ ] Check for directory listing enabled
+  - [x] Check for directory listing enabled
   - [ ] Check for unnecessary HTTP methods (TRACE, OPTIONS leaking info)
-  - [ ] Check for server version disclosure in headers (`Server`, `X-Powered-By`)
-  - [ ] Check for CORS misconfiguration (already partially in `heuristic_engine.py` but needs Playwright validation)
+  - [x] Check for server version disclosure in headers (`Server`, `X-Powered-By`)
+  - [x] Check for CORS misconfiguration (already partially in `heuristic_engine.py` but needs Playwright validation)
   - [ ] Check for XML External Entity (XXE) on XML endpoints
   - [ ] Check for open redirect via query parameter manipulation
-  - File: Create `backend/app/engine/validation_lanes.py` — new `SecurityMisconfigurationLane` class
+  - File: `backend/app/engine/validation_lanes.py` — new `run_misconfiguration_lane()` method
 
-- [ ] **A06:2021 — Vulnerable and Outdated Components**
-  - [ ] Parse HTML `<script>` tags for known CDN library versions (jQuery, Angular, React, Bootstrap)
-  - [ ] Check for `X-Powered-By` header revealing framework version
+- [x] **A06:2021 — Vulnerable and Outdated Components**
+  - [x] Parse HTML `<script>` tags for known CDN library versions (jQuery, Angular, React, Bootstrap)
+  - [x] Check for `X-Powered-By` header revealing framework version
   - [ ] Check for known CVEs against detected versions using NVD API or `osv.dev`
   - [ ] Check for outdated JavaScript libraries via SourceMap analysis
   - [ ] Check for deprecated API endpoints (e.g., `/api/v1/` vs `/api/v2/`)
-  - File: Create `backend/app/engine/validation_lanes.py` — new `VulnerableComponentsLane` class
+  - File: `backend/app/engine/validation_lanes.py` — new `run_vulnerable_components_lane()` method
 
-- [ ] **A07:2021 — Identification and Authentication Failures**
+- [x] **A07:2021 — Identification and Authentication Failures**
   - [ ] Check for brute-force protection (attempt 5+ logins, check response pattern)
   - [ ] Check for credential stuffing indicators (different user agents, same IP)
   - [ ] Check for session fixation (session ID changes after login)
   - [ ] Check for weak password policy enforcement (if signup exists)
-  - [ ] Check for account enumeration via login error messages
+  - [x] Check for account enumeration via login error messages
   - [ ] Check for missing multi-factor authentication prompts
-  - File: Create `backend/app/engine/validation_lanes.py` — new `AuthFailuresLane` class
+  - File: `backend/app/engine/validation_lanes.py` — new `run_auth_failures_lane()` method
 
-- [ ] **A08:2021 — Software and Data Integrity Failures**
-  - [ ] Check for JavaScript loaded from non-HTTPS sources
-  - [ ] Check for missing Subresource Integrity (SRI) on CDN scripts
+- [x] **A08:2021 — Software and Data Integrity Failures**
+  - [x] Check for JavaScript loaded from non-HTTPS sources
+  - [x] Check for missing Subresource Integrity (SRI) on CDN scripts
   - [ ] Check for insecure deserialization (if JSON/XML endpoints accept serialized objects)
   - [ ] Check for CI/CD pipeline integrity (if `.github/workflows` or similar exposed)
   - [ ] Check for auto-update without signature verification
-  - File: Create `backend/app/engine/validation_lanes.py` — new `DataIntegrityLane` class
+  - File: `backend/app/engine/validation_lanes.py` — new `run_data_integrity_lane()` method
 
-- [ ] **A09:2021 — Security Logging and Monitoring Failures**
-  - [ ] Check if error pages expose internal information
-  - [ ] Check if security headers indicate monitoring (e.g., `X-Request-Id`)
-  - [ ] Check for rate limit headers indicating monitoring (`X-RateLimit-*`)
+- [x] **A09:2021 — Security Logging and Monitoring Failures**
+  - [x] Check if error pages expose internal information
+  - [x] Check if security headers indicate monitoring (e.g., `X-Request-Id`)
+  - [x] Check for rate limit headers indicating monitoring (`X-RateLimit-*`)
   - [ ] Check if login/logout events are logged (analyze response patterns)
-  - File: Create `backend/app/engine/validation_lanes.py` — new `LoggingFailuresLane` class
+  - File: `backend/app/engine/validation_lanes.py` — new `run_logging_failures_lane()` method
 
-- [ ] **A10:2021 — Server-Side Request Forgery (SSRF)**
-  - [ ] Already have URL validation in `services/security.py` — needs Playwright-based validation
-  - [ ] Test with internal IP ranges (127.0.0.1, 10.x, 192.168.x, 169.254.x)
-  - [ ] Test with cloud metadata endpoints (169.254.169.254)
+- [x] **A10:2021 — Server-Side Request Forgery (SSRF)**
+  - [x] Already have URL validation in `services/security.py` — needs Playwright-based validation
+  - [x] Test with internal IP ranges (127.0.0.1, 10.x, 192.168.x, 169.254.x)
+  - [x] Test with cloud metadata endpoints (169.254.169.254)
   - [ ] Test with file:// and gopher:// protocol handlers
   - [ ] Test DNS rebinding attacks
-  - File: Create `backend/app/engine/validation_lanes.py` — new `SSRFLane` class
+  - File: `backend/app/engine/validation_lanes.py` — new `run_ssrf_lane()` method
 
-- [ ] **Wire all new lanes into `attack_orchestrator.py`**
-  - Update `modules` dict at line 632 to map each OWASP category to its lane class
-  - Remove `_evaluate_placeholder_category()` stub
+- [x] **Wire all new lanes into `attack_orchestrator.py`**
+  - [x] Update `modules` dict at line 632 to map each OWASP category to its lane class
+  - [x] Remove `_evaluate_placeholder_category()` stub
   - File: `backend/app/orchestrator/attack_orchestrator.py`
 
-- [ ] **Implement `_ensure_allowed_target()`** — Currently a no-op (`pass`). Should verify the target domain is in the allowlist or has been verified.
+- [x] **Implement `_ensure_allowed_target()`** — Currently a no-op (`pass`). Should verify the target domain is in the allowlist or has been verified.
   - File: `backend/app/orchestrator/attack_orchestrator.py:152-153`
 
 ---
@@ -663,7 +663,7 @@
 | P0 — Critical Bugs | 5 | 5 | 0 |
 | P0 — Missing Methods | 2 | 2 | 0 |
 | P0 — Unmounted Security | 5 | 5 | 0 |
-| P1 — OWASP Validation | 12 | 3 | 9 |
+| P1 — OWASP Validation | 12 | 12 | 0 |
 | P1 — Auth Gaps | 8 | 0 | 8 |
 | P1 — Scan Lifecycle | 6 | 0 | 6 |
 | P1 — Frontend Gaps | 14 | 0 | 14 |
@@ -676,7 +676,7 @@
 | P3 — Documentation | 5 | 0 | 5 |
 | P3 — Mobile Audit | 7 | 0 | 7 |
 | P3 — CI/CD | 5 | 0 | 5 |
-| **TOTAL** | **128** | **15** | **113** |
+| **TOTAL** | **128** | **24** | **104** |
 
-> **Current completion: ~67%** (15 of 128 items done)
-> **Estimated effort: 2-4 weeks for a single developer**
+> **Current completion: ~75%** (24 of 128 items done)
+> **Estimated effort: 1-3 weeks for a single developer**

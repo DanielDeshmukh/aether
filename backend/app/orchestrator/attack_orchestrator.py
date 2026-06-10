@@ -149,8 +149,12 @@ class AttackOrchestrator:
         return (parsed.hostname or "").lower()
 
     def _ensure_allowed_target(self, target_url: str) -> None:
-        """Allow any target - actual authorization is handled by domain verification."""
-        pass
+        host = self._target_host(target_url)
+        if host not in self.allowed_hosts:
+            raise RuntimeError(
+                f"TARGET_NOT_ALLOWED: '{host}' is not in the AETHER_VALIDATION_HOSTS allowlist. "
+                f"Allowed: {sorted(self.allowed_hosts)}"
+            )
 
     async def _require_verified_target(self, target_url: str) -> None:
         self._check_abort()
@@ -541,13 +545,62 @@ class AttackOrchestrator:
             )
             await self._append_trace(trace, "analyze", f"{finding.title.upper()} confirmed and persisted from Playwright lane evidence.", category="A03")
 
-    async def _evaluate_placeholder_category(self, category: str, trace: List[Dict[str, Any]]) -> None:
-        await self._append_trace(
-            trace,
-            "analyze",
-            f"{category} recorded as evaluated in scaffold mode. No active module is enabled for this category yet.",
-            category=category,
+    async def _run_lane_for_category(self, lane_method_name: str, category: str, context: Any, target_url: str, trace: List[Dict[str, Any]]) -> None:
+        if self.verification_service is None:
+            await self._append_trace(trace, "plan", f"{category} skipped: no verification service.", category=category)
+            return
+        lane_manager = ValidationLaneManager(
+            verification_service=self.verification_service,
+            user_id=str(self.user_id),
+            trace_writer=lambda phase, message: self._append_trace(trace, phase, message, category=category),
+            abort_check=self._check_abort,
+            rate_limit=self._throttle_request,
+            interaction_delay_ms=self.current_interaction_delay_ms,
         )
+        lane_method = getattr(lane_manager, lane_method_name, None)
+        if lane_method is None:
+            await self._append_trace(trace, "analyze", f"{category}: lane method {lane_method_name} not found.", category=category)
+            return
+        confirmed_findings = await lane_method(context, target_url)
+        for finding in confirmed_findings:
+            await self._insert_finding(
+                trace,
+                category=finding.category,
+                title=finding.title,
+                severity=finding.severity,
+                detail=finding.detail,
+                attack_vector=finding.attack_vector,
+                evidence_snippet=finding.evidence_snippet,
+                provided_solution=finding.provided_solution,
+                evidence=finding.evidence,
+            )
+            await self._append_trace(trace, "analyze", f"{finding.title.upper()} confirmed from {category} lane.", category=category)
+        if not confirmed_findings:
+            await self._append_trace(trace, "analyze", f"{category} lane completed with no confirmed findings.", category=category)
+
+    async def _validate_a02_crypto_failures(self, context: Any, target_url: str, trace: List[Dict[str, Any]]) -> None:
+        await self._run_lane_for_category("run_crypto_failures_lane", "A02:2021-Cryptographic Failures", context, target_url, trace)
+
+    async def _validate_a04_insecure_design(self, context: Any, target_url: str, trace: List[Dict[str, Any]]) -> None:
+        await self._run_lane_for_category("run_insecure_design_lane", "A04:2021-Insecure Design", context, target_url, trace)
+
+    async def _validate_a05_misconfiguration(self, context: Any, target_url: str, trace: List[Dict[str, Any]]) -> None:
+        await self._run_lane_for_category("run_misconfiguration_lane", "A05:2021-Security Misconfiguration", context, target_url, trace)
+
+    async def _validate_a06_vulnerable_components(self, context: Any, target_url: str, trace: List[Dict[str, Any]]) -> None:
+        await self._run_lane_for_category("run_vulnerable_components_lane", "A06:2021-Vulnerable and Outdated Components", context, target_url, trace)
+
+    async def _validate_a07_auth_failures(self, context: Any, target_url: str, trace: List[Dict[str, Any]]) -> None:
+        await self._run_lane_for_category("run_auth_failures_lane", "A07:2021-Identification and Authentication Failures", context, target_url, trace)
+
+    async def _validate_a08_data_integrity(self, context: Any, target_url: str, trace: List[Dict[str, Any]]) -> None:
+        await self._run_lane_for_category("run_data_integrity_lane", "A08:2021-Software and Data Integrity Failures", context, target_url, trace)
+
+    async def _validate_a09_logging_failures(self, context: Any, target_url: str, trace: List[Dict[str, Any]]) -> None:
+        await self._run_lane_for_category("run_logging_failures_lane", "A09:2021-Security Logging and Monitoring Failures", context, target_url, trace)
+
+    async def _validate_a10_ssrf(self, context: Any, target_url: str, trace: List[Dict[str, Any]]) -> None:
+        await self._run_lane_for_category("run_ssrf_lane", "A10:2021-Server-Side Request Forgery", context, target_url, trace)
 
     async def run_validation_loop(self, target_url: str) -> Dict[str, Any]:
         """
@@ -631,7 +684,15 @@ class AttackOrchestrator:
 
         modules = {
             "A01:2021-Broken Access Control": self._validate_a01_broken_access_control,
+            "A02:2021-Cryptographic Failures": self._validate_a02_crypto_failures,
             "A03:2021-Injection": self._run_playwright_validation_lanes,
+            "A04:2021-Insecure Design": self._validate_a04_insecure_design,
+            "A05:2021-Security Misconfiguration": self._validate_a05_misconfiguration,
+            "A06:2021-Vulnerable and Outdated Components": self._validate_a06_vulnerable_components,
+            "A07:2021-Identification and Authentication Failures": self._validate_a07_auth_failures,
+            "A08:2021-Software and Data Integrity Failures": self._validate_a08_data_integrity,
+            "A09:2021-Security Logging and Monitoring Failures": self._validate_a09_logging_failures,
+            "A10:2021-Server-Side Request Forgery": self._validate_a10_ssrf,
         }
 
         async with async_playwright() as playwright:
