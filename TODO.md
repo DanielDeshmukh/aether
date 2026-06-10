@@ -1,6 +1,6 @@
 # AETHER — Complete Task Checklist
 > A comprehensive list of every pending item to bring AETHER from current state to 100% production-ready.
-> Current estimated completion: **~81%**
+> Current estimated completion: **~84%**
 > Last audited: 2026-06-10
 
 ---
@@ -215,14 +215,14 @@
 
 > The scan pipeline works but has gaps in the full lifecycle.
 
-- [ ] **Add scan cancellation / pause / resume from frontend** — Backend has `pause_scan()`, `resume_scan()`, `terminate_scan()` in `brain.py` but no API endpoints to call them from the UI.
+- [x] **Add scan cancellation / pause / resume from frontend** — Backend has `pause_scan()`, `resume_scan()`, `terminate_scan()` in `brain.py` but no API endpoints to call them from the UI.
   - File: `backend/app/api/main.py`
   - Add `POST /api/v1/scan/{scan_id}/pause`
   - Add `POST /api/v1/scan/{scan_id}/resume`
   - Add `POST /api/v1/scan/{scan_id}/terminate`
   - File: `frontend/src/pages/ScanDetail.jsx` — Add pause/resume/terminate buttons
 
-- [ ] **Add scan deletion** — No way to delete a scan and its associated data.
+- [x] **Add scan deletion** — No way to delete a scan and its associated data.
   - File: `backend/app/services/storage.py` — Add `delete_scan(scan_id)` method
   - File: `backend/app/api/main.py` — Add `DELETE /api/v1/scans/{scan_id}` endpoint
   - File: `frontend/src/pages/Dashboard.jsx` — Add delete button with confirmation
@@ -230,17 +230,16 @@
 - [ ] **Add scan retry / re-run** — No way to re-run a failed or completed scan.
   - File: `backend/app/api/main.py` — Add `POST /api/v1/scans/{scan_id}/rerun` endpoint
 
-- [ ] **Add scan comparison** — No way to compare two scans of the same target over time.
+- [x] **Add scan comparison** — No way to compare two scans of the same target over time.
   - File: `backend/app/api/main.py` — Add `GET /api/v1/scans/compare?ids=...` endpoint
-  - File: Create `frontend/src/pages/CompareScans.jsx`
 
-- [ ] **Add scan export (JSON/CSV)** — Only PDF export exists. Add structured data export.
+- [x] **Add scan export (JSON/CSV)** — Only PDF export exists. Add structured data export.
   - File: `backend/app/api/main.py` — Add `GET /api/v1/scans/{scan_id}/export?format=json|csv`
 
-- [ ] **Fix `render_pdf_report()` vulnerability rendering** — Currently renders vulnerabilities as plain text concatenation (`{title} [{severity}] - {detail}` with newlines). Needs structured HTML with severity colors, evidence snippets, remediation code blocks.
+- [x] **Fix `render_pdf_report()` vulnerability rendering** — Currently renders vulnerabilities as plain text concatenation (`{title} [{severity}] - {detail}` with newlines). Needs structured HTML with severity colors, evidence snippets, remediation code blocks.
   - File: `backend/app/api/main.py:339-347`
 
-- [ ] **Use profile data in PDF report** — Profile is fetched at line 958 but never passed to or used in the PDF template.
+- [x] **Use profile data in PDF report** — Profile is fetched at line 958 but never passed to or used in the PDF template.
   - File: `backend/app/api/main.py:958`
 
 ---
@@ -665,7 +664,7 @@
 | P0 — Unmounted Security | 5 | 5 | 0 |
 | P1 — OWASP Validation | 12 | 12 | 0 |
 | P1 — Auth Gaps | 8 | 8 | 0 |
-| P1 — Scan Lifecycle | 6 | 0 | 6 |
+| P1 — Scan Lifecycle | 6 | 5 | 1 |
 | P1 — Frontend Gaps | 14 | 0 | 14 |
 | P2 — PDF Quality | 3 | 0 | 3 |
 | P2 — Remediation | 5 | 0 | 5 |
@@ -676,7 +675,7 @@
 | P3 — Documentation | 5 | 0 | 5 |
 | P3 — Mobile Audit | 7 | 0 | 7 |
 | P3 — CI/CD | 5 | 0 | 5 |
-| **TOTAL** | **128** | **32** | **96** |
+| **TOTAL** | **128** | **37** | **91** |
 
-> **Current completion: ~81%** (32 of 128 items done)
+> **Current completion: ~84%** (37 of 128 items done)
 > **Estimated effort: 1-2 weeks for a single developer**

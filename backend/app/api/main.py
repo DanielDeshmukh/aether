@@ -378,15 +378,50 @@ async def render_pdf_report(scan: dict, vulnerabilities: list[dict], profiles: l
     target_url = scan.get("target_url", "unknown")
     
     # Map vulnerabilities to HTML
-    vulnerabilities_content = ""
+    severity_colors = {
+        "CRITICAL": "#dc2626",
+        "HIGH": "#f97316",
+        "MEDIUM": "#eab308",
+        "LOW": "#3b82f6",
+        "INFO": "#6b7280",
+    }
     if not vulnerabilities:
-        vulnerabilities_content = "No vulnerabilities detected."
+        vulnerabilities_content = '<p class="item-text">No vulnerabilities detected.</p>'
     else:
+        cards = []
         for v in vulnerabilities:
             title = v.get("title", "Untitled Finding")
-            severity = v.get("severity", "unknown").upper()
+            severity = (v.get("severity") or "unknown").upper()
             detail = v.get("detail", "No detail provided.")
-            vulnerabilities_content += f"{title} [{severity}] - {detail}\n"
+            category = v.get("category", "")
+            evidence = v.get("evidence_snippet", "")
+            solution = v.get("provided_solution", "")
+            color = severity_colors.get(severity, "#6b7280")
+            card = f"""
+            <div style="border:1px solid #1A1A1A; border-left:4px solid {color}; padding:20px; margin-bottom:16px; background:#0d0d0d;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <span style="font-weight:700; font-size:14px; color:#fff;">{title}</span>
+                    <span style="background:{color}; color:#000; padding:3px 10px; font-size:11px; font-weight:700; text-transform:uppercase;">{severity}</span>
+                </div>
+                <div style="color:#888; font-size:11px; margin-bottom:8px; font-family:'JetBrains Mono',monospace;">{category}</div>
+                <p style="color:#ccc; font-size:13px; line-height:1.6; margin-bottom:10px;">{detail}</p>
+                {"<div style='background:#111; padding:10px; margin-top:8px; border:1px solid #222; font-family:monospace; font-size:11px; color:#aaa; white-space:pre-wrap;'>" + evidence + "</div>" if evidence else ""}
+                {"<div style='margin-top:8px; color:#22c55e; font-size:12px;'><strong>Fix:</strong> " + solution + "</div>" if solution else ""}
+            </div>
+            """
+            cards.append(card)
+        vulnerabilities_content = "".join(cards)
+
+    # Map profiles to HTML
+    if profiles:
+        profile_lines = []
+        for p in profiles:
+            label = p.get("label", "Unknown")
+            summary = p.get("summary", "")
+            profile_lines.append(f"<strong>{label}</strong>: {summary}")
+        profiles_content = "<br/>".join(profile_lines)
+    else:
+        profiles_content = "No profile data available."
 
     # Map diagnosis to HTML
     final_report = scan.get("final_report") or {}
@@ -540,8 +575,13 @@ async def render_pdf_report(scan: dict, vulnerabilities: list[dict], profiles: l
 
     <div class="section">
         <span class="section-title">Surface Vulnerabilities</span>
+        {vulnerabilities_content}
+    </div>
+
+    <div class="section">
+        <span class="section-title">Target Profile</span>
         <div class="content-card">
-            <p class="item-text">{vulnerabilities_content}</p>
+            <p class="item-text">{profiles_content}</p>
         </div>
     </div>
 
@@ -932,6 +972,143 @@ async def kill_scan(scan_id: str, user_id: str = Depends(get_current_user)):
     if brain:
         brain.terminate()
     return {"status": "termination_sequence_initiated", "scan_id": scan_id}
+
+
+@app.post("/api/v1/scan/{scan_id}/pause")
+async def pause_scan(scan_id: str, user_id: str = Depends(get_current_user)):
+    scan = active_scans.get(scan_id)
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found or not active.")
+    if scan.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="ACCESS DENIED.")
+    brain = brain_sessions.get(scan_id)
+    if not brain:
+        raise HTTPException(status_code=404, detail="Brain session not found.")
+    brain.pause("OPERATOR REQUESTED PAUSE VIA API.")
+    return {"status": "paused", "scan_id": scan_id}
+
+
+@app.post("/api/v1/scan/{scan_id}/resume")
+async def resume_scan(scan_id: str, user_id: str = Depends(get_current_user)):
+    scan = active_scans.get(scan_id)
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found or not active.")
+    if scan.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="ACCESS DENIED.")
+    brain = brain_sessions.get(scan_id)
+    if not brain:
+        raise HTTPException(status_code=404, detail="Brain session not found.")
+    brain.resume("OPERATOR REQUESTED RESUME VIA API.")
+    return {"status": "resumed", "scan_id": scan_id}
+
+
+@app.post("/api/v1/scan/{scan_id}/terminate")
+async def terminate_scan(scan_id: str, user_id: str = Depends(get_current_user)):
+    scan = active_scans.get(scan_id)
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found or not active.")
+    if scan.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="ACCESS DENIED.")
+    scan["active"] = False
+    brain = brain_sessions.get(scan_id)
+    if brain:
+        brain.terminate()
+    return {"status": "terminated", "scan_id": scan_id}
+
+
+@app.delete("/api/v1/scans/{scan_id}")
+async def delete_scan(scan_id: str, user_id: str = Depends(get_current_user)):
+    scan_storage.ensure_schema()
+    deleted = scan_storage.delete_scan(scan_id, user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Scan not found.")
+    active_scans.pop(scan_id, None)
+    brain_sessions.pop(scan_id, None)
+    return {"message": "Scan deleted successfully"}
+
+
+@app.get("/api/v1/scans/compare")
+async def compare_scans(ids: str, user_id: str = Depends(get_current_user)):
+    scan_storage.ensure_schema()
+    scan_id_list = [i.strip() for i in ids.split(",") if i.strip()]
+    if len(scan_id_list) < 2:
+        raise HTTPException(status_code=400, detail="Provide at least 2 scan IDs to compare.")
+    scans = scan_storage.fetch_scans_by_ids(scan_id_list, user_id)
+    if len(scans) < 2:
+        raise HTTPException(status_code=404, detail="Not enough matching scans found.")
+    result = []
+    for scan in scans:
+        vulns = scan_storage.fetch_vulnerabilities(str(scan["id"]), user_id)
+        result.append({
+            "scan_id": str(scan["id"]),
+            "target_url": scan.get("target_url"),
+            "status": scan.get("status"),
+            "threat_level": scan.get("threat_level"),
+            "created_at": scan.get("created_at").isoformat() if scan.get("created_at") else None,
+            "vulnerability_count": len(vulns),
+            "vulnerabilities": [{"title": v.get("title"), "severity": v.get("severity"), "category": v.get("category")} for v in vulns],
+        })
+    return {"comparison": result}
+
+
+@app.get("/api/v1/scans/{scan_id}/export")
+async def export_scan(scan_id: str, format: str = "json", user_id: str = Depends(get_current_user)):
+    scan_storage.ensure_schema()
+    record = scan_storage.fetch_scan(scan_id, user_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Scan not found.")
+    vulnerabilities = scan_storage.fetch_vulnerabilities(scan_id, user_id)
+    profiles = scan_storage.fetch_profiles(scan_id, user_id)
+
+    export_data = {
+        "scan_id": scan_id,
+        "target_url": record.get("target_url"),
+        "status": record.get("status"),
+        "threat_level": record.get("threat_level"),
+        "created_at": record.get("created_at").isoformat() if record.get("created_at") else None,
+        "completed_at": record.get("completed_at").isoformat() if record.get("completed_at") else None,
+        "final_report": record.get("final_report"),
+        "vulnerabilities": [
+            {
+                "id": v.get("id"),
+                "title": v.get("title"),
+                "severity": v.get("severity"),
+                "category": v.get("category"),
+                "detail": v.get("detail"),
+                "attack_vector": v.get("attack_vector"),
+                "evidence_snippet": v.get("evidence_snippet"),
+                "provided_solution": v.get("provided_solution"),
+            }
+            for v in vulnerabilities
+        ],
+        "profiles": [
+            {
+                "label": p.get("label"),
+                "summary": p.get("summary"),
+                "details": p.get("details"),
+            }
+            for p in profiles
+        ],
+    }
+
+    if format == "csv":
+        import csv
+        import io
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=[
+            "id", "title", "severity", "category", "detail", "attack_vector", "evidence_snippet", "provided_solution"
+        ])
+        writer.writeheader()
+        for v in export_data["vulnerabilities"]:
+            writer.writerow(v)
+        from fastapi.responses import Response
+        return Response(
+            content=output.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=scan-{scan_id}.csv"},
+        )
+
+    return export_data
 
 
 @app.get("/api/v1/scans")

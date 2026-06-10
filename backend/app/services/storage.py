@@ -1628,6 +1628,33 @@ class ScanStorage:
         except Exception:
             return 0
 
+    def delete_scan(self, scan_id: str, user_id: str) -> bool:
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        "DELETE FROM public.scans WHERE id = %s AND user_id = %s",
+                        (uuid.UUID(str(scan_id)), uuid.UUID(str(user_id))),
+                    )
+                    return cursor.rowcount > 0
+        except Exception as error:
+            self._logger.error("Failed to delete scan: %s", str(error))
+            return False
+
+    def fetch_scans_by_ids(self, scan_ids: list[str], user_id: str) -> list[Dict[str, Any]]:
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(row_factory=psycopg.rows.dict_row) as cursor:
+                    uuids = [uuid.UUID(str(sid)) for sid in scan_ids]
+                    cursor.execute(
+                        """SELECT * FROM public.scans WHERE id = ANY(%s) AND user_id = %s ORDER BY created_at DESC""",
+                        (uuids, uuid.UUID(str(user_id))),
+                    )
+                    return cursor.fetchall()
+        except Exception as error:
+            self._logger.error("Failed to fetch scans for comparison: %s", str(error))
+            return []
+
     def fetch_vulnerabilities(self, scan_id: str, user_id: str) -> list[Dict[str, Any]]:
         try:
             scan = self.fetch_scan(scan_id, user_id)
