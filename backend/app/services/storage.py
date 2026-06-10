@@ -938,7 +938,6 @@ class ScanStorage:
         scan_uuid = uuid.UUID(normalized_scan_id)
         session_uuid = uuid.UUID(normalized_session_id)
         user_uuid = self._coerce_uuid(user_id)
-        profile_email = str(user_id)
         now_iso = datetime.now(timezone.utc).isoformat()
         normalized_initial_plan = initial_plan if isinstance(initial_plan, dict) else {"steps": []}
         scan_results = results or {}

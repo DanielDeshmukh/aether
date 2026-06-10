@@ -377,6 +377,8 @@ def build(clean: bool):
     """
     banner()
 
+    import shutil
+
     root_dir = Path(__file__).parent.parent.parent
     frontend_dir = root_dir / "frontend"
 
@@ -388,13 +390,11 @@ def build(clean: bool):
         log_info("Cleaning build artifacts...")
         dist_dir = frontend_dir / "dist"
         if dist_dir.exists():
-            import shutil
             shutil.rmtree(dist_dir)
             log_info("Cleaned dist/")
 
         node_modules = frontend_dir / "node_modules"
         if node_modules.exists():
-            import shutil
             shutil.rmtree(node_modules)
             log_info("Cleaned node_modules/")
 
@@ -732,6 +732,8 @@ def clean(all: bool):
       aether clean          # Clean build output only
       aether clean -a       # Clean everything (including node_modules)
     """
+    import shutil
+
     banner()
 
     root_dir = Path(__file__).parent.parent.parent
@@ -741,14 +743,12 @@ def clean(all: bool):
     for pattern in ["**/__pycache__", "**/*.pyc", "**/.pytest_cache", "**/htmlcov"]:
         for path in root_dir.glob(pattern):
             if path.is_dir():
-                import shutil
                 shutil.rmtree(path)
                 cleaned.append(str(path.relative_to(root_dir)))
 
     # Frontend build
     dist_dir = root_dir / "frontend" / "dist"
     if dist_dir.exists():
-        import shutil
         shutil.rmtree(dist_dir)
         cleaned.append("frontend/dist")
 
@@ -756,7 +756,6 @@ def clean(all: bool):
         for name in ["node_modules", ".vite"]:
             for path in root_dir.rglob(name):
                 if path.is_dir():
-                    import shutil
                     shutil.rmtree(path)
                     cleaned.append(str(path.relative_to(root_dir)))
 

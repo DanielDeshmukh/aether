@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, field_validator, ValidationError
 

@@ -427,7 +427,7 @@ class ValidationLaneManager:
         try:
             await self._require_verified_target(target_url)
             await self._throttle()
-            response = await page.goto(target_url, wait_until="domcontentloaded", timeout=15000)
+            await page.goto(target_url, wait_until="domcontentloaded", timeout=15000)
 
             exposed_docs = ["/docs", "/redoc", "/swagger", "/swagger-ui", "/api-docs"]
             base = f"{parsed.scheme}://{parsed.netloc}" if (parsed := urlparse(target_url)) else target_url.rstrip("/")
@@ -596,7 +596,7 @@ class ValidationLaneManager:
 
             # Check for unnecessary HTTP methods (TRACE, OPTIONS leaking info)
             try:
-                trace_resp = await page.goto(target_url, wait_until="domcontentloaded", timeout=5000)
+                await page.goto(target_url, wait_until="domcontentloaded", timeout=5000)
                 # Try OPTIONS request to check allowed methods
                 options_headers = {"Access-Control-Request-Method": "TRACE"}
                 options_resp = await page.evaluate("""

@@ -1,5 +1,4 @@
 import asyncio
-import base64
 import logging
 import os
 import tempfile
@@ -46,15 +45,6 @@ async def render_pdf_report(scan: dict, vulnerabilities: list[dict], profiles: l
     current_dir = Path(__file__).resolve().parent
     logo_path = (current_dir / ".." / ".." / ".." / "frontend" / "public" / "images" / "logo.png").resolve()
     logo_uri = logo_path.as_uri() if logo_path.exists() else None
-
-    # Load logo as base64
-    logo_base64 = ""
-    try:
-        if logo_path.exists():
-            with open(logo_path, "rb") as f:
-                logo_base64 = base64.b64encode(f.read()).decode()
-    except Exception:
-        logger.exception("Failed to load logo for PDF")
 
     target_url = scan.get("target_url", "unknown")
     

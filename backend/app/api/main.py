@@ -8,7 +8,6 @@ import json
 import logging
 import os
 import sys
-import tempfile
 import uuid
 from typing import Dict, List
 from urllib.parse import urlparse
@@ -499,7 +498,6 @@ async def create_scan(
 
     result = create_scan_record(normalized_target, user_id=user_id)
 
-    import asyncio
     asyncio.create_task(broadcast_dashboard_update({
         "type": "scan_update",
         "scan": {
@@ -924,7 +922,6 @@ async def rerun_scan(scan_id: str, user_id: str = Depends(check_scan_quota)):
     result = create_scan_record(target_url, user_id=user_id)
     
     # Broadcast dashboard update
-    import asyncio
     asyncio.create_task(broadcast_dashboard_update({
         "type": "scan_update",
         "scan": {
@@ -1043,7 +1040,6 @@ async def export_scan(scan_id: str, format: str = "json", user_id: str = Depends
 
     if format == "csv":
         import csv
-        import io
         output = io.StringIO()
         writer = csv.DictWriter(output, fieldnames=[
             "id", "title", "severity", "category", "detail", "attack_vector", "evidence_snippet", "provided_solution"
