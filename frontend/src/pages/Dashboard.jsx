@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
+import WebSocketStatus from '../components/WebSocketStatus';
+import ScanChart from '../components/ScanChart';
 import { auth } from '../lib/auth';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 import { apiRequest } from '../lib/apiClient';
@@ -62,6 +64,8 @@ const Dashboard = () => {
   const [sortBy, setSortBy] = useState('date');
   const [filterStatus, setFilterStatus] = useState('all');
   const [deleteConfirmId, setDeleteConfirmId] = useState('');
+  const [wsConnected, setWsConnected] = useState(false);
+  const [wsReconnecting, setWsReconnecting] = useState(false);
   const navigate = useNavigate();
   const wsRef = useRef(null);
   useDocumentTitle('Dashboard');
@@ -88,8 +92,18 @@ const Dashboard = () => {
     const connectDashboardWs = () => {
       const token = auth.getAccessToken();
       if (!token) return;
+      
+      setWsReconnecting(true);
       const ws = new WebSocket(buildWsUrl(`/ws/dashboard?token=${token}`));
       wsRef.current = ws;
+      
+      ws.onopen = () => {
+        if (isMounted) {
+          setWsConnected(true);
+          setWsReconnecting(false);
+        }
+      };
+      
       ws.onmessage = (event) => {
         if (!isMounted) return;
         try {
@@ -103,13 +117,29 @@ const Dashboard = () => {
           }
         } catch {}
       };
-      ws.onclose = () => { if (isMounted) setTimeout(connectDashboardWs, 3000); };
-      ws.onerror = () => { ws.close(); };
+      
+      ws.onclose = () => {
+        if (isMounted) {
+          setWsConnected(false);
+          setTimeout(connectDashboardWs, 3000);
+        }
+      };
+      
+      ws.onerror = () => {
+        if (isMounted) {
+          setWsConnected(false);
+        }
+        ws.close();
+      };
     };
+    
     connectDashboardWs();
     return () => {
       isMounted = false;
-      if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); }
+      if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.close();
+      }
     };
   }, []);
 
@@ -144,9 +174,20 @@ const Dashboard = () => {
 
   useEffect(() => { setPage(1); }, [sortBy, filterStatus]);
 
+  const handleRetryConnection = () => {
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#050505] font-lambo text-white">
       <Header />
+      <WebSocketStatus 
+        isConnected={wsConnected} 
+        isReconnecting={wsReconnecting} 
+        onRetry={handleRetryConnection}
+      />
       <main className="relative overflow-hidden px-5 pb-16 pt-28 md:px-10">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,193,7,0.05),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_22%)]" />
         <div className="absolute left-0 top-0 h-full w-full bg-[linear-gradient(135deg,transparent_0%,transparent_48%,rgba(255,193,7,0.02)_48%,rgba(255,193,7,0.02)_49%,transparent_49%,transparent_100%)] opacity-30" />
@@ -177,6 +218,10 @@ const Dashboard = () => {
           {error && (
             <div className="chamfer-panel mt-6 border border-[rgba(255,123,114,0.28)] bg-[rgba(255,59,48,0.08)] px-5 py-4 text-[10px] font-bold tracking-[0.28em] text-[#ff7b72]">{error}</div>
           )}
+
+          <div className="mt-6">
+            <ScanChart scans={scans} />
+          </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-4 text-[10px] tracking-[0.2em]">
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}

@@ -836,6 +836,42 @@ async def delete_scan(scan_id: str, user_id: str = Depends(get_current_user)):
     return {"message": "Scan deleted successfully"}
 
 
+@app.post("/api/v1/scans/{scan_id}/rerun")
+async def rerun_scan(scan_id: str, user_id: str = Depends(check_scan_quota)):
+    """Re-run a failed or completed scan."""
+    scan_storage.ensure_schema()
+    record = scan_storage.fetch_scan(scan_id=scan_id, user_id=user_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Scan not found.")
+    
+    target_url = record.get("target_url")
+    if not target_url:
+        raise HTTPException(status_code=400, detail="Scan record is missing target URL.")
+    
+    # Create a new scan with the same target
+    result = create_scan_record(target_url, user_id=user_id)
+    
+    # Broadcast dashboard update
+    import asyncio
+    asyncio.create_task(broadcast_dashboard_update({
+        "type": "scan_update",
+        "scan": {
+            "id": result["scan_id"],
+            "target_url": target_url,
+            "status": "pending",
+            "user_id": user_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        },
+    }))
+    
+    return {
+        "message": "Scan re-run initiated",
+        "original_scan_id": scan_id,
+        "new_scan_id": result["scan_id"],
+        "target_url": target_url,
+    }
+
+
 @app.get("/api/v1/scans/compare")
 async def compare_scans(ids: str, user_id: str = Depends(get_current_user)):
     scan_storage.ensure_schema()

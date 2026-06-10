@@ -1,6 +1,6 @@
 # AETHER — Complete Task Checklist
 > A comprehensive list of every pending item to bring AETHER from current state to 100% production-ready.
-> Current estimated completion: **~52%** (67 of 128 items done)
+> Current estimated completion: **~55%** (70 of 128 items done)
 > Last audited: 2026-06-10
 
 ---
@@ -227,7 +227,7 @@
   - File: `backend/app/api/main.py` — Add `DELETE /api/v1/scans/{scan_id}` endpoint
   - File: `frontend/src/pages/Dashboard.jsx` — Add delete button with confirmation
 
-- [ ] **Add scan retry / re-run** — No way to re-run a failed or completed scan.
+- [x] **Add scan retry / re-run** — No way to re-run a failed or completed scan.
   - File: `backend/app/api/main.py` — Add `POST /api/v1/scans/{scan_id}/rerun` endpoint
 
 - [x] **Add scan comparison** — No way to compare two scans of the same target over time.
@@ -275,7 +275,7 @@
 - [x] **Remove fake/decorative stats from ScanningConsole** — Lines 277-279 show `Neural_Depth: 88%`, `Risk_Score: LVL_3` which are hardcoded decorative values, not real data.
   - File: `frontend/src/components/ScanningConsole.jsx`
 
-- [ ] **Add error boundary for WebSocket disconnection** — Dashboard and ScanDetail WebSocket connections have no user-facing reconnection indicator.
+- [x] **Add error boundary for WebSocket disconnection** — Dashboard and ScanDetail WebSocket connections have no user-facing reconnection indicator.
   - File: `frontend/src/pages/Dashboard.jsx`, `frontend/src/pages/ScanDetail.jsx`
 
 - [x] **Add loading state for remediation generation** — Currently only shows "Generating..." button text. Needs a proper loading spinner/progress indicator.
@@ -285,7 +285,7 @@
   - File: `frontend/src/pages/Settings.jsx`
   - File: `frontend/src/App.jsx` — Add route
 
-- [ ] **Add scan history chart/visualization** — No visual representation of scan trends over time on the dashboard.
+- [x] **Add scan history chart/visualization** — No visual representation of scan trends over time on the dashboard.
   - File: `frontend/src/pages/Dashboard.jsx` or create `frontend/src/components/ScanChart.jsx`
 
 ---
@@ -663,8 +663,8 @@
 | P0 — Unmounted Security | 5 | 5 | 0 |
 | P1 — OWASP Validation | 12 | 12 | 0 |
 | P1 — Auth Gaps | 8 | 8 | 0 |
-| P1 — Scan Lifecycle | 6 | 5 | 1 |
-| P1 — Frontend Gaps | 14 | 12 | 2 |
+| P1 — Scan Lifecycle | 6 | 6 | 0 |
+| P1 — Frontend Gaps | 14 | 14 | 0 |
 | P2 — PDF Quality | 3 | 2 | 1 |
 | P2 — Remediation | 5 | 3 | 2 |
 | P2 — Infrastructure | 10 | 10 | 0 |
@@ -674,7 +674,7 @@
 | P3 — Documentation | 5 | 0 | 5 |
 | P3 — Mobile Audit | 7 | 0 | 7 |
 | P3 — CI/CD | 5 | 0 | 5 |
-| **TOTAL** | **128** | **67** | **61** |
+| **TOTAL** | **128** | **70** | **58** |
 
-> **Current completion: ~52%** (67 of 128 items done - past halfway mark!)
+> **Current completion: ~55%** (70 of 128 items done - past halfway mark!)
 > **Estimated effort: < 1 week for a single developer**
