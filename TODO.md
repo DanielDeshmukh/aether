@@ -1,6 +1,6 @@
 # AETHER — Complete Task Checklist
 > A comprehensive list of every pending item to bring AETHER from current state to 100% production-ready.
-> Current estimated completion: **~85%** (109 of 128 items done)
+> Current estimated completion: **~91%** (116 of 128 items done)
 > Last audited: 2026-06-10
 
 ---
@@ -550,25 +550,25 @@
 
 > AGENTS.md Definition of Done requires mobile-responsive audit for the dashboard.
 
-- [ ] **Audit Dashboard.jsx for mobile** — Verify scan cards stack properly on small screens.
+- [x] **Audit Dashboard.jsx for mobile** — Verify scan cards stack properly on small screens.
   - File: `frontend/src/pages/Dashboard.jsx`
 
-- [ ] **Audit ScanDetail.jsx for mobile** — Verify vulnerability list, remediation steps are readable on mobile.
+- [x] **Audit ScanDetail.jsx for mobile** — Verify vulnerability list, remediation steps are readable on mobile.
   - File: `frontend/src/pages/ScanDetail.jsx`
 
-- [ ] **Audit Header.jsx for mobile** — Verify navigation is accessible on mobile (hamburger menu).
+- [x] **Audit Header.jsx for mobile** — Verify navigation is accessible on mobile (hamburger menu).
   - File: `frontend/src/components/Header.jsx`
 
-- [ ] **Audit SidebarTelemetry.jsx for mobile** — Verify sidebar collapses or becomes a bottom sheet on mobile.
+- [x] **Audit SidebarTelemetry.jsx for mobile** — Verify sidebar collapses or becomes a bottom sheet on mobile.
   - File: `frontend/src/components/SidebarTelemetry.jsx`
 
-- [ ] **Audit ScanningConsole.jsx for mobile** — Verify streaming output is readable on small screens.
+- [x] **Audit ScanningConsole.jsx for mobile** — Verify streaming output is readable on small screens.
   - File: `frontend/src/components/ScanningConsole.jsx`
 
-- [ ] **Audit JoinUs.jsx for mobile** — Verify auth forms are usable on mobile.
+- [x] **Audit JoinUs.jsx for mobile** — Verify auth forms are usable on mobile.
   - File: `frontend/src/pages/JoinUs.jsx`
 
-- [ ] **Test on common mobile viewports** — 375px (iPhone SE), 390px (iPhone 14), 414px (iPhone 14 Plus), 768px (iPad).
+- [x] **Test on common mobile viewports** — 375px (iPhone SE), 390px (iPhone 14), 414px (iPhone 14 Plus), 768px (iPad).
   - Use Chrome DevTools device toolbar or Playwright mobile emulation.
 
 ---
@@ -672,9 +672,9 @@
 | P3 — Test Suite | 30 | 30 | 0 |
 | P3 — Code Cleanup | 8 | 6 | 2 |
 | P3 — Documentation | 5 | 0 | 5 |
-| P3 — Mobile Audit | 7 | 0 | 7 |
+| P3 — Mobile Audit | 7 | 7 | 0 |
 | P3 — CI/CD | 5 | 0 | 5 |
-| **TOTAL** | **128** | **109** | **19** |
+| **TOTAL** | **128** | **116** | **12** |
 
-> **Current completion: ~85%** (109 of 128 items done - almost there!)
-> **Estimated effort: < 2 days for a single developer**
+> **Current completion: ~91%** (116 of 128 items done - almost there!)
+> **Estimated effort: < 1 day for a single developer**
