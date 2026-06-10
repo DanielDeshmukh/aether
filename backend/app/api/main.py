@@ -46,6 +46,7 @@ class ScanCreateRequest(BaseModel):
     consent_confirmed: bool = False
 
 def get_allowed_origins() -> List[str]:
+    """Get allowed CORS origins based on environment."""
     environment = os.getenv("ENVIRONMENT", "development")
     frontend_url = os.getenv("FRONTEND_URL", "")
     if frontend_url:
@@ -233,7 +234,7 @@ def create_scan_record(target_url: str, user_id: str | None = None) -> dict:
         "user_id": user_id,
     }
     brain_sessions[scan_id] = BrainOrchestrator(scan_id=scan_id, target_url=target_url)
-    return {"scan_id": scan_id, "target_url": target_url}
+    return standard_response(data={"scan_id": scan_id, "target_url": target_url})
 
 
 def hydrate_brain_from_record(scan_id: str, record: dict) -> BrainOrchestrator:
@@ -248,6 +249,25 @@ async def safe_send_json(websocket: WebSocket, payload: dict) -> None:
     if websocket.client_state.name != "CONNECTED":
         return
     await websocket.send_json(payload)
+
+
+def standard_response(data: Any = None, message: str | None = None) -> dict:
+    """
+    Create a standard API response format.
+    
+    Args:
+        data: The response data (optional)
+        message: A success message (optional)
+        
+    Returns:
+        A dictionary with 'data' and/or 'message' keys
+    """
+    response = {}
+    if data is not None:
+        response["data"] = data
+    if message is not None:
+        response["message"] = message
+    return response
 
 
 async def enforce_target_verification(
@@ -413,18 +433,18 @@ def derive_public_api_base_url(websocket: WebSocket) -> str | None:
 @app.get("/health")
 async def healthcheck():
     db_health = scan_storage.check_database_health()
-    return {
+    return standard_response(data={
         "status": "online" if db_health.get("healthy", False) else "degraded",
         "engine": "O-P-E-A Flow Active",
         "database": db_health,
-    }
+    })
 
 
 @app.get("/api/v1/health")
 async def api_healthcheck():
     db_health = scan_storage.check_database_health()
     pool_stats = scan_storage.get_pool_stats()
-    return {
+    return standard_response(data={
         "status": "online" if db_health.get("healthy", False) else "degraded",
         "active_scans": len(active_scans),
         "brain_sessions": len(brain_sessions),
@@ -434,18 +454,18 @@ async def api_healthcheck():
         "connection_pool": pool_stats,
         "scan_persistence_ready": scan_storage.database_configured(),
         "plan_persistence_supported": bool(os.getenv("DATABASE_URL")),
-    }
+    })
 
 
 @app.get("/api/v1/verification/status")
 async def get_verification_status(domain: str, user_id: str | None = Depends(get_current_user)):
     """Get verification status for a domain."""
     verification = await domain_verification_manager.verify_target(f"https://{domain}", user_id=user_id)
-    return {
+    return standard_response(data={
         "domain": domain,
         "verification": verification.model_dump(),
         "rate_limit_status": domain_verification_manager.get_rate_limit_status(domain),
-    }
+    })
 
 
 @app.post("/api/v1/scans")
@@ -822,7 +842,7 @@ async def terminate_scan(scan_id: str, user_id: str = Depends(get_current_user))
     brain = brain_sessions.get(scan_id)
     if brain:
         brain.terminate()
-    return {"status": "terminated", "scan_id": scan_id}
+    return standard_response(data={"scan_id": scan_id}, message="terminated")
 
 
 @app.delete("/api/v1/scans/{scan_id}")
@@ -833,7 +853,7 @@ async def delete_scan(scan_id: str, user_id: str = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Scan not found.")
     active_scans.pop(scan_id, None)
     brain_sessions.pop(scan_id, None)
-    return {"message": "Scan deleted successfully"}
+    return standard_response(message="Scan deleted successfully")
 
 
 @app.post("/api/v1/scans/{scan_id}/rerun")
@@ -864,12 +884,14 @@ async def rerun_scan(scan_id: str, user_id: str = Depends(check_scan_quota)):
         },
     }))
     
-    return {
-        "message": "Scan re-run initiated",
-        "original_scan_id": scan_id,
-        "new_scan_id": result["scan_id"],
-        "target_url": target_url,
-    }
+    return standard_response(
+        data={
+            "original_scan_id": scan_id,
+            "new_scan_id": result["data"]["scan_id"],
+            "target_url": target_url,
+        },
+        message="Scan re-run initiated",
+    )
 
 
 @app.get("/api/v1/scans/compare")
@@ -893,7 +915,7 @@ async def compare_scans(ids: str, user_id: str = Depends(get_current_user)):
             "vulnerability_count": len(vulns),
             "vulnerabilities": [{"title": v.get("title"), "severity": v.get("severity"), "category": v.get("category")} for v in vulns],
         })
-    return {"comparison": result}
+    return standard_response(data=result)
 
 
 @app.get("/api/v1/scans/{scan_id}/export")
@@ -960,7 +982,7 @@ async def export_scan(scan_id: str, format: str = "json", user_id: str = Depends
 async def get_remediation_history(scan_id: str, user_id: str = Depends(get_current_user)):
     scan_storage.ensure_schema()
     history = scan_storage.fetch_remediation_history(scan_id, user_id)
-    return {"history": history}
+    return standard_response(data=history)
 
 
 @app.get("/api/v1/scans")
@@ -1102,7 +1124,7 @@ async def email_scan_report(
     if not success:
         raise HTTPException(status_code=500, detail="FAILED TO SEND EMAIL. PLEASE TRY AGAIN.")
     
-    return {"message": "Report sent successfully", "email": payload.email}
+    return standard_response(data={"email": payload.email}, message="Report sent successfully")
 
 
 @app.websocket("/ws/remediation/{scan_id}")

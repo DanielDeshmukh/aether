@@ -21,6 +21,7 @@ from app.services.auth import (
 from app.services.email import send_magic_link_email
 from app.services.storage import ScanStorage
 from app.api.rate_limiter import rate_limit_magic_link, rate_limit_refresh
+from app.api.main import standard_response
 
 logger = logging.getLogger("aether.auth")
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
@@ -147,7 +148,7 @@ async def request_magic_link(payload: MagicLinkRequest, request: Request, _rate_
             detail="Failed to send magic link email. Please try again.",
         )
 
-    return {"message": "Magic link sent to your email."}
+    return standard_response(message="Magic link sent to your email.")
 
 
 @router.get("/verify")
@@ -226,7 +227,7 @@ async def refresh_token(payload: RefreshRequest, request: Request, _rate_limit: 
     email = row[0]
     access = create_access_token(user_id, email)
 
-    return {"access_token": access, "token_type": "bearer"}
+    return standard_response(data={"access_token": access, "token_type": "bearer"})
 
 
 @router.get("/me")
@@ -255,13 +256,13 @@ async def get_me(request: Request):
     if not row:
         raise HTTPException(status_code=401, detail="User not found")
 
-    return {
+    return standard_response(data={
         "id": str(row[0]),
         "email": row[1],
         "name": row[2],
         "provider": row[3],
         "created_at": row[4].isoformat() if row[4] else None,
-    }
+    })
 
 
 @router.post("/logout")
@@ -286,7 +287,7 @@ async def logout(request: Request):
         expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
         storage.revoke_token(jti, user_id, expires_at)
 
-    return {"message": "Logged out successfully"}
+    return standard_response(message="Logged out successfully")
 
 
 @router.delete("/account")
@@ -310,7 +311,7 @@ async def delete_account(request: Request):
     if not deleted:
         raise HTTPException(status_code=404, detail="User not found")
 
-    return {"message": "Account deleted successfully"}
+    return standard_response(message="Account deleted successfully")
 
 
 @router.patch("/me")
@@ -334,7 +335,7 @@ async def update_profile(request: Request, name: Optional[str] = None, email: Op
     if not updated:
         raise HTTPException(status_code=400, detail="No changes applied")
 
-    return {"message": "Profile updated successfully"}
+    return standard_response(message="Profile updated successfully")
 
 
 @router.get("/github")

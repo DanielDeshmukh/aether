@@ -1,6 +1,6 @@
 # AETHER — Complete Task Checklist
 > A comprehensive list of every pending item to bring AETHER from current state to 100% production-ready.
-> Current estimated completion: **~60%** (77 of 128 items done)
+> Current estimated completion: **~62%** (79 of 128 items done)
 > Last audited: 2026-06-10
 
 ---
@@ -507,10 +507,10 @@
 - [x] **Remove `replace_hunt_findings()` dead code** from `storage.py:1328` (raises `NotImplementedError`).
   - File: `backend/app/services/storage.py:1328`
 
-- [ ] **Standardize API response format** — Some endpoints return `{ "data": ... }`, others return raw objects. Pick one format and apply consistently.
+- [x] **Standardize API response format** — Some endpoints return `{ "data": ... }`, others return raw objects. Pick one format and apply consistently.
   - Files: All files in `backend/app/api/`
 
-- [ ] **Add type hints to all functions** — Many functions lack return type annotations.
+- [x] **Add type hints to all functions** — Many functions lack return type annotations.
   - Files: All files in `backend/app/`
 
 - [ ] **Add docstrings to all public functions** — Many functions lack docstrings.
@@ -670,11 +670,11 @@
 | P2 — Infrastructure | 10 | 10 | 0 |
 | P2 — Domain Verification | 3 | 3 | 0 |
 | P3 — Test Suite | 30 | 0 | 30 |
-| P3 — Code Cleanup | 8 | 4 | 4 |
+| P3 — Code Cleanup | 8 | 6 | 2 |
 | P3 — Documentation | 5 | 0 | 5 |
 | P3 — Mobile Audit | 7 | 0 | 7 |
 | P3 — CI/CD | 5 | 0 | 5 |
-| **TOTAL** | **128** | **77** | **51** |
+| **TOTAL** | **128** | **79** | **49** |
 
-> **Current completion: ~60%** (77 of 128 items done - past halfway mark!)
+> **Current completion: ~62%** (79 of 128 items done - past halfway mark!)
 > **Estimated effort: < 1 week for a single developer**
