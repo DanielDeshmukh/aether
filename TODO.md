@@ -1,6 +1,6 @@
 # AETHER — Complete Task Checklist
 > A comprehensive list of every pending item to bring AETHER from current state to 100% production-ready.
-> Current estimated completion: **~84%**
+> Current estimated completion: **~89%**
 > Last audited: 2026-06-10
 
 ---
@@ -248,41 +248,41 @@
 
 > UI/UX gaps that affect production readiness.
 
-- [ ] **Dashboard: Add pagination** — Currently hardcoded to 12 scans (line 124). Add infinite scroll or page controls.
+- [x] **Dashboard: Add pagination** — Currently hardcoded to 12 scans (line 124). Add infinite scroll or page controls.
   - File: `frontend/src/pages/Dashboard.jsx`
 
-- [ ] **Dashboard: Add filter/sort controls** — No way to filter by status, sort by date/threat level.
+- [x] **Dashboard: Add filter/sort controls** — No way to filter by status, sort by date/threat level.
   - File: `frontend/src/pages/Dashboard.jsx`
 
-- [ ] **Dashboard: Add vulnerability count per scan card** — Each scan card should show how many vulnerabilities were found.
+- [x] **Dashboard: Add vulnerability count per scan card** — Each scan card should show how many vulnerabilities were found.
   - File: `frontend/src/pages/Dashboard.jsx`
 
-- [ ] **Dashboard: Fix "running" state color** — Status colors don't handle `running` state properly.
+- [x] **Dashboard: Fix "running" state color** — Status colors don't handle `running` state properly.
   - File: `frontend/src/pages/Dashboard.jsx`
 
-- [ ] **ScanDetail: Add screenshot evidence display** — Backend serves screenshots at `/api/v1/scans/{scan_id}/vulnerabilities/{vuln_id}/evidence/screenshot` but the frontend never displays them.
+- [x] **ScanDetail: Add screenshot evidence display** — Backend serves screenshots at `/api/v1/scans/{scan_id}/vulnerabilities/{vuln_id}/evidence/screenshot` but the frontend never displays them.
   - File: `frontend/src/pages/ScanDetail.jsx`
 
-- [ ] **ScanDetail: Add re-fetch after remediation** — Currently relies solely on WebSocket updates, which may be delayed.
+- [x] **ScanDetail: Add re-fetch after remediation** — Currently relies solely on WebSocket updates, which may be delayed.
   - File: `frontend/src/pages/ScanDetail.jsx`
 
-- [ ] **ScanDetail: Add pause/resume/terminate buttons** — Wire to new API endpoints (see Scan Lifecycle section).
+- [x] **ScanDetail: Add pause/resume/terminate buttons** — Wire to new API endpoints (see Scan Lifecycle section).
   - File: `frontend/src/pages/ScanDetail.jsx`
 
-- [ ] **ScanDetail: Add PDF download button** — PDF download is only on SidebarTelemetry, not on the scan detail page itself.
+- [x] **ScanDetail: Add PDF download button** — PDF download is only on SidebarTelemetry, not on the scan detail page itself.
   - File: `frontend/src/pages/ScanDetail.jsx`
 
-- [ ] **Remove fake/decorative stats from ScanningConsole** — Lines 277-279 show `Neural_Depth: 88%`, `Risk_Score: LVL_3` which are hardcoded decorative values, not real data.
-  - File: `frontend/src/components/ScanningConsole.jsx:277-279`
+- [x] **Remove fake/decorative stats from ScanningConsole** — Lines 277-279 show `Neural_Depth: 88%`, `Risk_Score: LVL_3` which are hardcoded decorative values, not real data.
+  - File: `frontend/src/components/ScanningConsole.jsx`
 
 - [ ] **Add error boundary for WebSocket disconnection** — Dashboard and ScanDetail WebSocket connections have no user-facing reconnection indicator.
   - File: `frontend/src/pages/Dashboard.jsx`, `frontend/src/pages/ScanDetail.jsx`
 
-- [ ] **Add loading state for remediation generation** — Currently only shows "Generating..." button text. Needs a proper loading spinner/progress indicator.
+- [x] **Add loading state for remediation generation** — Currently only shows "Generating..." button text. Needs a proper loading spinner/progress indicator.
   - File: `frontend/src/pages/ScanDetail.jsx`
 
-- [ ] **Add user profile / settings page** — No way for users to view or update their profile, preferences, or API keys.
-  - File: Create `frontend/src/pages/Settings.jsx`
+- [x] **Add user profile / settings page** — No way for users to view or update their profile, preferences, or API keys.
+  - File: `frontend/src/pages/Settings.jsx`
   - File: `frontend/src/App.jsx` — Add route
 
 - [ ] **Add scan history chart/visualization** — No visual representation of scan trends over time on the dashboard.
@@ -665,7 +665,7 @@
 | P1 — OWASP Validation | 12 | 12 | 0 |
 | P1 — Auth Gaps | 8 | 8 | 0 |
 | P1 — Scan Lifecycle | 6 | 5 | 1 |
-| P1 — Frontend Gaps | 14 | 0 | 14 |
+| P1 — Frontend Gaps | 14 | 12 | 2 |
 | P2 — PDF Quality | 3 | 0 | 3 |
 | P2 — Remediation | 5 | 0 | 5 |
 | P2 — Infrastructure | 10 | 0 | 10 |
@@ -675,7 +675,7 @@
 | P3 — Documentation | 5 | 0 | 5 |
 | P3 — Mobile Audit | 7 | 0 | 7 |
 | P3 — CI/CD | 5 | 0 | 5 |
-| **TOTAL** | **128** | **37** | **91** |
+| **TOTAL** | **128** | **49** | **79** |
 
-> **Current completion: ~84%** (37 of 128 items done)
-> **Estimated effort: 1-2 weeks for a single developer**
+> **Current completion: ~89%** (49 of 128 items done)
+> **Estimated effort: 1 week for a single developer**

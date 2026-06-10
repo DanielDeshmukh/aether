@@ -272,11 +272,10 @@ const ScanningConsole = ({ scanSession, className = '' }) => {
                 </div>
             </div>
 
-                <div className="grid grid-cols-3 gap-4 mt-6">
+                <div className="grid grid-cols-2 gap-4 mt-6">
                 {[
-                    { label: '// Neural_Depth', val: '88%' },
-                    { label: '// Active_Nodes', val: logs.length },
-                    { label: '// Risk_Score', val: status === 'terminated' ? '0' : status === 'failed' ? 'ERR' : 'LVL_3' },
+                    { label: '// Log Entries', val: logs.length },
+                    { label: '// Scan Status', val: status?.toUpperCase() || 'ACTIVE' },
                 ].map((stat, i) => (
                     <div key={i} className="bg-[#0d0d0d] border border-white/10 p-3 text-center group hover:border-lambo-gold/30 transition-colors">
                         <p className="text-[8px] text-lambo-ash uppercase mb-1 tracking-widest">{stat.label}</p>

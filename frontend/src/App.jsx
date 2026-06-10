@@ -13,6 +13,7 @@ import JoinUs from './pages/JoinUs';
 import AuthCallback from './pages/AuthCallback';
 import Dashboard from './pages/Dashboard';
 import ScanDetail from './pages/ScanDetail';
+import Settings from './pages/Settings';
 import { useDocumentTitle } from './lib/useDocumentTitle';
 
 
@@ -48,6 +49,7 @@ function App() {
           <Route path="/home" element={<Homepage/>} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/dashboard/:scanId" element={<ScanDetail />} />
+          <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
     </div>

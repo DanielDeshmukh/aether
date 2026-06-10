@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Header from '../components/Header';
 import { buildWsUrl } from '../lib/api';
@@ -96,6 +96,75 @@ const ScanDetail = () => {
   const lastPullRequest = autoRemediation.last_pull_request;
   const [loadingPrId, setLoadingPrId] = useState('');
   const [gitPushStatus, setGitPushStatus] = useState('');
+  const [loadingAction, setLoadingAction] = useState('');
+  const [screenshots, setScreenshots] = useState({});
+
+  const refetchScan = useCallback(async () => {
+    try {
+      const response = await apiRequest(`/api/v1/scans/${scanId}`);
+      const data = await response.json();
+      setScan(data ?? null);
+    } catch {}
+  }, [scanId]);
+
+  const handlePause = async () => {
+    setLoadingAction('pause');
+    try {
+      await apiRequest(`/api/v1/scan/${scanId}/pause`, { method: 'POST' });
+      await refetchScan();
+    } catch {}
+    setLoadingAction('');
+  };
+
+  const handleResume = async () => {
+    setLoadingAction('resume');
+    try {
+      await apiRequest(`/api/v1/scan/${scanId}/resume`, { method: 'POST' });
+      await refetchScan();
+    } catch {}
+    setLoadingAction('');
+  };
+
+  const handleTerminate = async () => {
+    setLoadingAction('terminate');
+    try {
+      await apiRequest(`/api/v1/scan/${scanId}/terminate`, { method: 'POST' });
+      await refetchScan();
+    } catch {}
+    setLoadingAction('');
+  };
+
+  const handleDownloadPdf = async () => {
+    try {
+      const token = auth.getAccessToken();
+      const response = await fetch(`/api/v1/scans/${scanId}/report`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error('PDF generation failed');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `aether-report-${scanId.slice(0, 8)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {}
+  };
+
+  const loadScreenshot = async (vulnId) => {
+    if (screenshots[vulnId]) return;
+    try {
+      const token = auth.getAccessToken();
+      const response = await fetch(`/api/v1/scans/${scanId}/vulnerabilities/${vulnId}/evidence/screenshot`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        setScreenshots((prev) => ({ ...prev, [vulnId]: url }));
+      }
+    } catch {}
+  };
 
   const handleRemediate = async (vulnId) => {
     setLoadingFixId(vulnId);
@@ -128,6 +197,7 @@ const ScanDetail = () => {
         }));
       }
       setLoadingFixId('');
+      setTimeout(refetchScan, 1500);
       socket.close();
     };
 
@@ -209,22 +279,42 @@ const ScanDetail = () => {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,192,0,0.05),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_22%)]" />
 
         <section className="relative mx-auto max-w-7xl space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[10px] font-bold tracking-[0.4em] text-lambo-gold">// Mission Debrief</p>
-              <h1 className="mt-3 break-all text-3xl font-black tracking-[-0.03em] text-lambo-white md:text-5xl">
-                {scan?.target_url ?? 'Loading Scan'}
-              </h1>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-bold tracking-[0.4em] text-lambo-gold">// Mission Debrief</p>
+                <h1 className="mt-3 break-all text-3xl font-black tracking-[-0.03em] text-lambo-white md:text-5xl">
+                  {scan?.target_url ?? 'Loading Scan'}
+                </h1>
+              </div>
+              <div className="flex items-center gap-3 flex-wrap justify-end">
+                <button type="button" onClick={handleDownloadPdf}
+                  className="chamfer-button border border-lambo-gold/30 bg-lambo-gold/10 px-4 py-3 text-[10px] font-bold tracking-[0.2em] text-lambo-gold transition-colors hover:bg-lambo-gold/20">
+                  Download PDF
+                </button>
+                {scan?.status?.toLowerCase() === 'running' && (
+                  <>
+                    <button type="button" onClick={handlePause} disabled={loadingAction}
+                      className="chamfer-button border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-[10px] font-bold tracking-[0.2em] text-yellow-400 transition-colors hover:bg-yellow-500/20 disabled:opacity-50">
+                      {loadingAction === 'pause' ? 'Pausing...' : 'Pause'}
+                    </button>
+                    <button type="button" onClick={handleTerminate} disabled={loadingAction}
+                      className="chamfer-button border border-red-500/30 bg-red-500/10 px-4 py-3 text-[10px] font-bold tracking-[0.2em] text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50">
+                      {loadingAction === 'terminate' ? 'Terminating...' : 'Terminate'}
+                    </button>
+                  </>
+                )}
+                {scan?.status?.toLowerCase() === 'paused' && (
+                  <button type="button" onClick={handleResume} disabled={loadingAction}
+                    className="chamfer-button border border-green-500/30 bg-green-500/10 px-4 py-3 text-[10px] font-bold tracking-[0.2em] text-green-400 transition-colors hover:bg-green-500/20 disabled:opacity-50">
+                    {loadingAction === 'resume' ? 'Resuming...' : 'Resume'}
+                  </button>
+                )}
+                <Link to="/dashboard"
+                  className="chamfer-button border border-white/10 bg-white/5 px-4 py-3 text-[10px] font-bold tracking-[0.2em] text-lambo-ash transition-colors hover:border-lambo-gold/40 hover:text-lambo-gold">
+                  Back to Dashboard
+                </Link>
+              </div>
             </div>
-            <div className="flex items-center gap-6">
-              <Link
-                to="/dashboard"
-                className="chamfer-button border border-white/10 bg-white/5 px-4 py-3 text-[10px] font-bold tracking-[0.2em] text-lambo-ash transition-colors hover:border-lambo-gold/40 hover:text-lambo-gold"
-              >
-                Back to Dashboard
-              </Link>
-            </div>
-          </div>
 
           {error && (
             <div className="chamfer-panel border border-red-500/30 bg-red-500/10 px-5 py-4 text-[10px] font-bold tracking-[0.28em] text-red-500">
@@ -351,6 +441,19 @@ const ScanDetail = () => {
                                 <div className="h-28 w-full bg-white/5" />
                               </div>
                             </div>
+                          )}
+                              {screenshots[finding.id] && (
+                            <div className="mt-4">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-lambo-gold mb-2">Screenshot Evidence</p>
+                              <img src={screenshots[finding.id]} alt={`Evidence for ${finding.title}`}
+                                className="border border-white/10 max-w-full rounded" />
+                            </div>
+                          )}
+                          {!screenshots[finding.id] && (
+                            <button type="button" onClick={() => loadScreenshot(finding.id)}
+                              className="mt-3 text-[10px] font-bold tracking-[0.15em] text-lambo-ash hover:text-lambo-gold transition-colors">
+                              Load Screenshot Evidence
+                            </button>
                           )}
                           {remediation && (
                             <div className="mt-4 space-y-3">
