@@ -19,9 +19,11 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+import uuid as _uuid
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel, Field
 
 from app.api.auth_routes import router as auth_router
@@ -54,6 +56,41 @@ def get_allowed_origins() -> List[str]:
     ]
 
 
+_MAX_REQUEST_BYTES = 5 * 1024 * 1024  # 5 MB
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        if request.url.scheme == "https":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
+
+
+class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > _MAX_REQUEST_BYTES:
+            return Response(
+                content="Request body too large",
+                status_code=413,
+                media_type="text/plain",
+            )
+        return await call_next(request)
+
+
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        request_id = request.headers.get("x-request-id") or str(_uuid.uuid4())
+        response: Response = await call_next(request)
+        response.headers["X-Request-Id"] = request_id
+        return response
+
+
 app = FastAPI(title="AETHER Engine API")
 app.include_router(auth_router)
 
@@ -65,6 +102,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(AetherShieldMiddleware)
+app.add_middleware(RequestSizeLimitMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestIDMiddleware)
 
 active_scans: Dict[str, Dict[str, str | bool]] = {}
 brain_sessions: Dict[str, BrainOrchestrator] = {}

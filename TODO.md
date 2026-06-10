@@ -1,6 +1,6 @@
 # AETHER — Complete Task Checklist
 > A comprehensive list of every pending item to bring AETHER from current state to 100% production-ready.
-> Current estimated completion: **~64%**
+> Current estimated completion: **~67%**
 > Last audited: 2026-06-10
 
 ---
@@ -74,19 +74,19 @@
 
 - [x] **Mount AETHER-Shield middleware** — See Critical Bugs section above.
 
-- [ ] **Wire rate limiting on API endpoints** — `check_scan_quota()` exists but is not enforced. Additionally:
-  - [ ] Add per-user rate limiting on `POST /api/v1/scans` (max 3 concurrent)
-  - [ ] Add per-IP rate limiting on `/api/v1/auth/magic-link` (max 5/hour)
-  - [ ] Add per-user rate limiting on `/api/v1/auth/refresh` (max 20/hour)
-  - File: `backend/app/api/main.py`, `backend/app/api/deps.py`
+- [x] **Wire rate limiting on API endpoints** — `check_scan_quota()` exists but is not enforced. Additionally:
+  - [x] Add per-user rate limiting on `POST /api/v1/scans` (max 3 concurrent)
+  - [x] Add per-IP rate limiting on `/api/v1/auth/magic-link` (max 5/hour)
+  - [x] Add per-user rate limiting on `/api/v1/auth/refresh` (max 20/hour)
+  - File: `backend/app/api/main.py`, `backend/app/api/deps.py`, `backend/app/api/rate_limiter.py`
 
-- [ ] **Add security headers middleware to API responses** — CSP, HSTS, X-Content-Type-Options, X-Frame-Options on all API responses, not just scan targets.
+- [x] **Add security headers middleware to API responses** — CSP, HSTS, X-Content-Type-Options, X-Frame-Options on all API responses, not just scan targets.
   - File: `backend/app/api/main.py`
 
-- [ ] **Add request size limiting middleware** — Prevent abuse via oversized payloads.
+- [x] **Add request size limiting middleware** — Prevent abuse via oversized payloads.
   - File: `backend/app/api/main.py`
 
-- [ ] **Add request ID / correlation ID middleware** — For tracing and debugging.
+- [x] **Add request ID / correlation ID middleware** — For tracing and debugging.
   - File: `backend/app/api/main.py`
 
 ---
@@ -662,7 +662,7 @@
 |----------|------------|------|-----------|
 | P0 — Critical Bugs | 5 | 5 | 0 |
 | P0 — Missing Methods | 2 | 2 | 0 |
-| P0 — Unmounted Security | 5 | 1 | 4 |
+| P0 — Unmounted Security | 5 | 5 | 0 |
 | P1 — OWASP Validation | 12 | 3 | 9 |
 | P1 — Auth Gaps | 8 | 0 | 8 |
 | P1 — Scan Lifecycle | 6 | 0 | 6 |
@@ -676,7 +676,7 @@
 | P3 — Documentation | 5 | 0 | 5 |
 | P3 — Mobile Audit | 7 | 0 | 7 |
 | P3 — CI/CD | 5 | 0 | 5 |
-| **TOTAL** | **128** | **11** | **117** |
+| **TOTAL** | **128** | **15** | **113** |
 
-> **Current completion: ~64%** (11 of 128 items done)
+> **Current completion: ~67%** (15 of 128 items done)
 > **Estimated effort: 2-4 weeks for a single developer**

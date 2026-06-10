@@ -18,6 +18,7 @@ from app.services.auth import (
 )
 from app.services.email import send_magic_link_email
 from app.services.storage import ScanStorage
+from app.api.rate_limiter import rate_limit_magic_link, rate_limit_refresh
 
 logger = logging.getLogger("aether.auth")
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
@@ -116,7 +117,7 @@ def _verify_magic_link(token_hash: str) -> Optional[dict]:
 
 
 @router.post("/magic-link")
-async def request_magic_link(payload: MagicLinkRequest, request: Request):
+async def request_magic_link(payload: MagicLinkRequest, request: Request, _rate_limit: None = Depends(rate_limit_magic_link)):
     storage.ensure_schema()
 
     email = payload.email.lower().strip()
@@ -194,7 +195,7 @@ async def google_callback(code: str = Query(...)):
 
 
 @router.post("/refresh")
-async def refresh_token(payload: RefreshRequest):
+async def refresh_token(payload: RefreshRequest, request: Request, _rate_limit: None = Depends(rate_limit_refresh)):
     try:
         data = decode_token(payload.refresh_token, expected_type="refresh")
     except Exception as exc:
