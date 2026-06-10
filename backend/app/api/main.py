@@ -20,7 +20,6 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-import uuid as _uuid
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -108,7 +107,7 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        request_id = request.headers.get("x-request-id") or str(_uuid.uuid4())
+        request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
         response: Response = await call_next(request)
         response.headers["X-Request-Id"] = request_id
         return response
@@ -350,7 +349,7 @@ def build_nvidia_final_report(validation_result: dict, target_url: str) -> dict:
         ),
         "remediation_steps": remediation_steps,
         "synthesis": (
-            f"Nemotron-guided reasoning completed across the allowlisted OWASP validation lanes and "
+            "Nemotron-guided reasoning completed across the allowlisted OWASP validation lanes and "
             f"captured {len(findings)} persisted finding(s)."
         ),
     }
@@ -671,7 +670,7 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
                         "type": "analyze",
                         "phase": "analyze",
                         "msg": (
-                            f"ANALYZE: NVIDIA VALIDATION LOOP COMPLETE. "
+                            "ANALYZE: NVIDIA VALIDATION LOOP COMPLETE. "
                             f"{len(validation_result.get('findings', []))} CONFIRMED SIGNAL(S) LOCKED."
                         ),
                         "brain": brain.state.snapshot(),

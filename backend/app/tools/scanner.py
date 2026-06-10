@@ -47,7 +47,7 @@ def format_port_logs(scan_result: Dict[str, Any]) -> List[str]:
     if open_ports:
         return [
             f"[EXECUTE] PORT_SCAN: {host} RESPONDED ON {', '.join(str(port) for port in open_ports)}.",
-            f"[EXECUTE] PORT_SCAN: CLOSED OR FILTERED PORTS REMAIN UNDER OBSERVATION.",
+            "[EXECUTE] PORT_SCAN: CLOSED OR FILTERED PORTS REMAIN UNDER OBSERVATION.",
         ]
 
     return [

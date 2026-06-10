@@ -109,13 +109,13 @@ def get_google_auth_url() -> str:
     actual_redirect = redirect_uri or f"{frontend_url}/api/v1/auth/google/callback"
 
     return (
-        f"https://accounts.google.com/o/oauth2/v2/auth?"
+        "https://accounts.google.com/o/oauth2/v2/auth?"
         f"client_id={client_id}&"
         f"redirect_uri={actual_redirect}&"
-        f"response_type=code&"
-        f"scope=openid%20email%20profile&"
-        f"access_type=offline&"
-        f"prompt=consent"
+        "response_type=code&"
+        "scope=openid%20email%20profile&"
+        "access_type=offline&"
+        "prompt=consent"
     )
 
 
@@ -185,8 +185,8 @@ def get_github_auth_url() -> str:
     actual_redirect = redirect_uri or f"{frontend_url}/api/v1/auth/github/callback"
 
     return (
-        f"https://github.com/login/oauth/authorize?"
+        "https://github.com/login/oauth/authorize?"
         f"client_id={client_id}&"
         f"redirect_uri={actual_redirect}&"
-        f"scope=user:email"
+        "scope=user:email"
     )
