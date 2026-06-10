@@ -1,3 +1,5 @@
+⭐ If AETHER gave you a smarter way to think about automated pentesting — a star helps other security engineers find it. Takes 2 seconds.
+
 # AETHER (Automated Ethical Testing & Heuristic Evaluation Routine)
 
 ## Welcome

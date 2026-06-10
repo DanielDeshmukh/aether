@@ -251,23 +251,7 @@ async def safe_send_json(websocket: WebSocket, payload: dict) -> None:
     await websocket.send_json(payload)
 
 
-def standard_response(data: Any = None, message: str | None = None) -> dict:
-    """
-    Create a standard API response format.
-    
-    Args:
-        data: The response data (optional)
-        message: A success message (optional)
-        
-    Returns:
-        A dictionary with 'data' and/or 'message' keys
-    """
-    response = {}
-    if data is not None:
-        response["data"] = data
-    if message is not None:
-        response["message"] = message
-    return response
+from app.api.utils import standard_response
 
 
 async def enforce_target_verification(

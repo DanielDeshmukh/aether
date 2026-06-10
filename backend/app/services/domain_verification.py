@@ -20,6 +20,24 @@ logger = logging.getLogger("aether.domain_verification")
 VERIFICATION_CACHE_TTL = 24 * 60 * 60
 
 
+class VerificationMethodResult(BaseModel):
+    method: str
+    success: bool
+    expected_location: str
+    expected_value: str | None = None
+    detail: str
+
+
+class DomainVerificationResult(BaseModel):
+    domain: str
+    allowed: bool
+    is_verified: bool = False
+    record_found: bool = False
+    failure_message: str | None = None
+    dns: VerificationMethodResult | None = None
+    http: VerificationMethodResult | None = None
+
+
 class VerificationCache:
     """In-memory cache for domain verification results with TTL."""
     
@@ -105,24 +123,6 @@ class VerificationRateLimiter:
         if domain not in self._attempts:
             return self._max_attempts
         return max(0, self._max_attempts - len(self._attempts[domain]))
-
-
-class VerificationMethodResult(BaseModel):
-    method: str
-    success: bool
-    expected_location: str
-    expected_value: str | None = None
-    detail: str
-
-
-class DomainVerificationResult(BaseModel):
-    domain: str
-    allowed: bool
-    is_verified: bool = False
-    record_found: bool = False
-    failure_message: str | None = None
-    dns: VerificationMethodResult | None = None
-    http: VerificationMethodResult | None = None
 
 
 class DomainVerificationManager:

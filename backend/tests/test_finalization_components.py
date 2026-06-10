@@ -2,7 +2,6 @@ import pytest
 from app.api.shield import AetherShield
 from app.orchestrator.intent_router import IntentRouter, ScanIntent
 from app.engine.heuristic_engine import HeuristicEngine
-import asyncio
 import inspect
 
 def test_aether_shield_token_generation_and_verification():
@@ -36,8 +35,7 @@ def test_intent_router_logic():
     verdict = router.route(intent)
     assert verdict.orchestrator == "attack_orchestrator"
 
-@pytest.mark.asyncio
-async def test_heuristic_engine_structure():
+def test_heuristic_engine_structure():
     # We won't run full network tests here, but check it initializes
     engine = HeuristicEngine("https://example.com")
     assert engine.target_url == "https://example.com"

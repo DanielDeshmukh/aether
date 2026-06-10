@@ -1,11 +1,16 @@
 import unittest
 from unittest.mock import MagicMock, patch, AsyncMock
-from app.engine.validation_lanes import ValidationLanes
+from app.engine.validation_lanes import ValidationLaneManager
 
 
 class TestValidationLanes(unittest.TestCase):
     def setUp(self):
-        self.lanes = ValidationLanes()
+        self.lanes = ValidationLaneManager(
+            verification_service=MagicMock(),
+            user_id="test_user",
+            trace_writer=AsyncMock(),
+            abort_check=MagicMock(),
+        )
 
     def test_initialization(self):
         assert self.lanes is not None

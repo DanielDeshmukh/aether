@@ -9,7 +9,9 @@ class TestScanStoragePrivacy(unittest.TestCase):
         self.storage = ScanStorage()
         self.storage._pool = MagicMock()
         self.mock_connection = MagicMock()
-        self.storage.get_connection = MagicMock(return_value=self.mock_connection)
+        self.storage.get_connection = MagicMock()
+        self.storage.get_connection.return_value.__enter__ = MagicMock(return_value=self.mock_connection)
+        self.storage.get_connection.return_value.__exit__ = MagicMock(return_value=False)
         self.current_user_id = str(uuid.uuid4())
 
     def test_fetch_scan_filters_by_user_id(self):
@@ -39,6 +41,7 @@ class TestScanStoragePrivacy(unittest.TestCase):
         scan_id = str(uuid.uuid4())
         mock_cursor = MagicMock()
         mock_cursor.fetchone.return_value = None
+        mock_cursor.rowcount = 1
         self.mock_connection.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         self.mock_connection.cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -51,6 +54,7 @@ class TestScanStoragePrivacy(unittest.TestCase):
         scan_id = str(uuid.uuid4())
         remediations = {"fix": "details"}
         mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
         self.mock_connection.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         self.mock_connection.cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -63,6 +67,7 @@ class TestScanStoragePrivacy(unittest.TestCase):
         target_url = "http://example.com"
         ip_address = "127.0.0.1"
         mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = [1]
         self.mock_connection.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         self.mock_connection.cursor.return_value.__exit__ = MagicMock(return_value=False)
 

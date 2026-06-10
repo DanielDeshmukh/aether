@@ -10,14 +10,14 @@ class TestBrainOrchestrator(unittest.TestCase):
         self.brain = BrainOrchestrator(scan_id=self.scan_id, target_url=self.target_url)
 
     def test_initial_state(self):
-        assert self.brain.scan_id == self.scan_id
-        assert self.brain.target_url == self.target_url
+        assert self.brain.state.scan_id == self.scan_id
+        assert self.brain.state.target_url == self.target_url
         assert self.brain.state is not None
-        assert self.brain.execution_results == {}
+        assert self.brain.execution_results == {"tech_stack": None, "port_scan": None, "header_audit": None, "audit_engine": None}
 
     def test_append_thought(self):
         self.brain.append_thought("plan", "Test thought")
-        assert len(self.brain.state.thoughts) > 0
+        assert len(self.brain.state.notes) > 0
 
     def test_serialize_results(self):
         results = self.brain.serialize_results()

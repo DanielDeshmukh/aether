@@ -21,7 +21,7 @@ from app.services.auth import (
 from app.services.email import send_magic_link_email
 from app.services.storage import ScanStorage
 from app.api.rate_limiter import rate_limit_magic_link, rate_limit_refresh
-from app.api.main import standard_response
+from app.api.utils import standard_response
 
 logger = logging.getLogger("aether.auth")
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])

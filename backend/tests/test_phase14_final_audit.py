@@ -15,16 +15,18 @@ class TestPhase14FinalAudit(unittest.TestCase):
     def tearDown(self):
         app.dependency_overrides = {}
 
+    @patch("app.api.main.create_scan_record", return_value={"scan_id": "test-scan-id", "target_url": "https://example.com", "data": {"scan_id": "test-scan-id", "target_url": "https://example.com"}})
     @patch.object(scan_storage, "ensure_schema", MagicMock(return_value=None))
     @patch.object(scan_storage, "log_consent", MagicMock(return_value=True))
     @patch.object(scan_storage, "get_or_create_target", MagicMock(return_value="550e8400-e29b-41d4-a716-446655440000"))
-    def test_cheater_fourth_scan_blocked_with_mvp_limit_message(self):
+    def test_cheater_fourth_scan_blocked_with_mvp_limit_message(self, mock_create_scan):
         # Note: Check quota is tested in test_phase12_quota_guard.py
         # This test focuses on the integration after new get_or_create_target method
         def _auth_override():
             return "a7988ba7-c5f5-4ad1-a35d-6814f75c6bf4"
 
         app.dependency_overrides[get_current_user] = _auth_override
+        app.dependency_overrides[check_scan_quota] = _auth_override
 
         response = self.client.post(
             "/api/v1/scans",
