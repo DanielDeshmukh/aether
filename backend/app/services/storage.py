@@ -1363,6 +1363,75 @@ class ScanStorage:
                     )
                     return cursor.rowcount > 0
 
+    def update_scan_trace(self, user_id: str, scan_id: str, trace_data: Any) -> bool:
+        with self.get_connection() as connection:
+            with connection.transaction():
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        update public.scans
+                        set thought_trace = %s
+                        where id = %s and user_id = %s
+                        """,
+                        (
+                            Jsonb(trace_data),
+                            uuid.UUID(str(scan_id)),
+                            uuid.UUID(str(user_id)),
+                        ),
+                    )
+                    return cursor.rowcount > 0
+
+    def insert_vulnerability(
+        self,
+        user_id: str,
+        scan_id: str,
+        category: str,
+        title: str,
+        severity: str,
+        detail: str,
+        session_id: str | None,
+        attack_vector: str | None,
+        detected_threat: str | None,
+        evidence_snippet: str | None,
+        provided_solution: str | None,
+        evidence: Any,
+        finding_id: str | None,
+    ) -> str:
+        vuln_id = finding_id or str(uuid.uuid4())
+        with self.get_connection() as connection:
+            with connection.transaction():
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        insert into public.vulnerabilities (
+                            id, user_id, scan_id, session_id, category, title,
+                            severity, detail, attack_vector, detected_threat,
+                            evidence_snippet, provided_solution, evidence
+                        ) values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        on conflict (id) do update set
+                            severity = excluded.severity,
+                            detail = excluded.detail,
+                            evidence = excluded.evidence,
+                            provided_solution = excluded.provided_solution
+                        """,
+                        (
+                            uuid.UUID(vuln_id) if len(vuln_id) == 36 else vuln_id,
+                            uuid.UUID(str(user_id)),
+                            uuid.UUID(str(scan_id)),
+                            uuid.UUID(str(session_id)) if session_id else None,
+                            category,
+                            title,
+                            severity,
+                            detail,
+                            attack_vector,
+                            detected_threat,
+                            evidence_snippet,
+                            provided_solution,
+                            Jsonb(evidence) if evidence else Jsonb({}),
+                        ),
+                    )
+                    return str(vuln_id)
+
     def fetch_scan(self, scan_id: str, user_id: str) -> Dict[str, Any] | None:
         try:
             return self._fetch_owned_scan(scan_id=scan_id, user_id=user_id)
@@ -1446,6 +1515,19 @@ class ScanStorage:
         except Exception as error:
             self._logger.error("Get or create target failed for domain=%s user_id=%s: %s", domain, user_id, str(error))
             raise
+
+    def mark_target_verified(self, domain: str) -> bool:
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        "UPDATE targets SET is_verified = true WHERE domain = %s",
+                        (domain,),
+                    )
+                    return cursor.rowcount > 0
+        except Exception as error:
+            self._logger.error("Failed to mark target verified for domain=%s: %s", domain, str(error))
+            return False
 
     def fetch_vulnerabilities(self, scan_id: str, user_id: str) -> list[Dict[str, Any]]:
         try:

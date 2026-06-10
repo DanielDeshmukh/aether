@@ -30,7 +30,8 @@ from app.orchestrator.brain import BrainBoundaryError, BrainOrchestrator, BrainS
 from app.services.domain_verification import DomainVerificationManager
 from app.services.git_integration_service import GitIntegrationService
 from app.services.storage import ScanStorage
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, check_scan_quota
+from app.api.shield import AetherShieldMiddleware
 from app.tools.validators import is_safe_url
 
 logger = logging.getLogger("aether.api")
@@ -63,6 +64,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(AetherShieldMiddleware)
 
 active_scans: Dict[str, Dict[str, str | bool]] = {}
 brain_sessions: Dict[str, BrainOrchestrator] = {}
@@ -563,7 +565,7 @@ async def api_healthcheck():
 async def create_scan(
     payload: ScanCreateRequest,
     request: Request,
-    user_id: str = Depends(get_current_user),
+    user_id: str = Depends(check_scan_quota),
 ):
     try:
         normalized_target = normalize_target(payload.target_url)

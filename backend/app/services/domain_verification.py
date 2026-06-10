@@ -207,9 +207,14 @@ class DomainVerificationManager:
         http_result = await self.verify_via_http(domain, expected_token, record.get("http_path"))
 
         if dns_result.success and http_result.success:
-            failure_message = (
-                f"DOMAIN VERIFICATION FAILED: TXT record `{dns_result.expected_location}` and "
-                f"`{http_result.expected_location}` both look correct, but `public.targets.is_verified` is still false for `{domain}`."
+            await asyncio.to_thread(self.storage.mark_target_verified, domain)
+            return DomainVerificationResult(
+                domain=domain,
+                allowed=True,
+                is_verified=True,
+                record_found=True,
+                dns=dns_result,
+                http=http_result,
             )
         else:
             missing_requirements: list[str] = []

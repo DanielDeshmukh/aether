@@ -1,6 +1,6 @@
 # AETHER — Complete Task Checklist
 > A comprehensive list of every pending item to bring AETHER from current state to 100% production-ready.
-> Current estimated completion: **~60-65%**
+> Current estimated completion: **~64%**
 > Last audited: 2026-06-10
 
 ---
@@ -30,25 +30,25 @@
 
 > These will cause `AttributeError` or silent failures at runtime.
 
-- [ ] **`storage.py`: Add `update_scan_trace()` method** — Called at `brain.py:1055` and `attack_orchestrator.py:167`. Will crash BrainOrchestrator when `process_agent_response()` path is taken.
+- [x] **`storage.py`: Add `update_scan_trace()` method** — Called at `brain.py:1055` and `attack_orchestrator.py:167`. Will crash BrainOrchestrator when `process_agent_response()` path is taken.
   - File: `backend/app/services/storage.py`
   - Implement SQL UPDATE on `scans.trace` JSONB column
 
-- [ ] **`storage.py`: Add `insert_vulnerability()` method** — Called at `brain.py:1065` and `attack_orchestrator.py:387`. Same crash risk.
+- [x] **`storage.py`: Add `insert_vulnerability()` method** — Called at `brain.py:1065` and `attack_orchestrator.py:387`. Same crash risk.
   - File: `backend/app/services/storage.py`
   - Implement SQL INSERT into `vulnerabilities` table
 
-- [ ] **Wire `check_scan_quota` into `POST /api/v1/scans`** — Quota check is defined in `deps.py:84-93` but never injected as a dependency on the scan creation endpoint.
+- [x] **Wire `check_scan_quota` into `POST /api/v1/scans`** — Quota check is defined in `deps.py:84-93` but never injected as a dependency on the scan creation endpoint.
   - File: `backend/app/api/main.py:563`
   - Add `quota: dict = Depends(check_scan_quota)` to `create_scan()` signature
   - Check `quota["allowed"]` before proceeding
 
-- [ ] **Mount `AetherShieldMiddleware` on the FastAPI app** — Defined in `shield.py:53` but never imported or added via `app.add_middleware()` anywhere. AGENTS.md explicitly requires this.
+- [x] **Mount `AetherShieldMiddleware` on the FastAPI app** — Defined in `shield.py:53` but never imported or added via `app.add_middleware()` anywhere. AGENTS.md explicitly requires this.
   - File: `backend/app/api/main.py`
   - Import `AetherShieldMiddleware` from `app.api.shield`
   - Add `app.add_middleware(AetherShieldMiddleware)` after CORS middleware
 
-- [ ] **Fix domain verification edge case** — When both DNS and HTTP succeed but `is_verified` is still `false`, the function returns `allowed=False` with a confusing message.
+- [x] **Fix domain verification edge case** — When both DNS and HTTP succeed but `is_verified` is still `false`, the function returns `allowed=False` with a confusing message.
   - File: `backend/app/services/domain_verification.py:209-213`
   - If both checks pass, auto-set `is_verified=true` or return `allowed=True`
 
@@ -58,11 +58,11 @@
 
 > Methods called by existing code that don't exist — will cause `AttributeError`.
 
-- [ ] **`ScanStorage.update_scan_trace(scan_id, trace_data)`** — Updates the `trace` JSONB column on a scan row.
+- [x] **`ScanStorage.update_scan_trace(scan_id, trace_data)`** — Updates the `trace` JSONB column on a scan row.
   - Callers: `brain.py:1055`, `attack_orchestrator.py:167`
   - SQL: `UPDATE scans SET trace = %s WHERE id = %s`
 
-- [ ] **`ScanStorage.insert_vulnerability(scan_id, vuln_data)`** — Inserts a row into the `vulnerabilities` table.
+- [x] **`ScanStorage.insert_vulnerability(scan_id, vuln_data)`** — Inserts a row into the `vulnerabilities` table.
   - Callers: `brain.py:1065`, `attack_orchestrator.py:387`
   - SQL: `INSERT INTO vulnerabilities (scan_id, title, severity, description, category, evidence, ...) VALUES (...)`
 
@@ -72,7 +72,7 @@
 
 > Security controls defined in code but never activated.
 
-- [ ] **Mount AETHER-Shield middleware** — See Critical Bugs section above.
+- [x] **Mount AETHER-Shield middleware** — See Critical Bugs section above.
 
 - [ ] **Wire rate limiting on API endpoints** — `check_scan_quota()` exists but is not enforced. Additionally:
   - [ ] Add per-user rate limiting on `POST /api/v1/scans` (max 3 concurrent)
@@ -660,9 +660,9 @@
 
 | Category | Total Items | Done | Remaining |
 |----------|------------|------|-----------|
-| P0 — Critical Bugs | 5 | 0 | 5 |
-| P0 — Missing Methods | 2 | 0 | 2 |
-| P0 — Unmounted Security | 5 | 0 | 5 |
+| P0 — Critical Bugs | 5 | 5 | 0 |
+| P0 — Missing Methods | 2 | 2 | 0 |
+| P0 — Unmounted Security | 5 | 1 | 4 |
 | P1 — OWASP Validation | 12 | 3 | 9 |
 | P1 — Auth Gaps | 8 | 0 | 8 |
 | P1 — Scan Lifecycle | 6 | 0 | 6 |
@@ -676,7 +676,7 @@
 | P3 — Documentation | 5 | 0 | 5 |
 | P3 — Mobile Audit | 7 | 0 | 7 |
 | P3 — CI/CD | 5 | 0 | 5 |
-| **TOTAL** | **128** | **3** | **125** |
+| **TOTAL** | **128** | **11** | **117** |
 
-> **Current completion: ~62%** (3 of 128 pending items already done)
-> **Estimated effort: 3-5 weeks for a single developer**
+> **Current completion: ~64%** (11 of 128 items done)
+> **Estimated effort: 2-4 weeks for a single developer**
