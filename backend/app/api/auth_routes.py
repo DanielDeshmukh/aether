@@ -12,8 +12,10 @@ from app.services.auth import (
     create_access_token,
     create_refresh_token,
     decode_token,
+    exchange_github_code,
     exchange_google_code,
     generate_magic_link_token,
+    get_github_auth_url,
     get_google_auth_url,
 )
 from app.services.email import send_magic_link_email
@@ -121,6 +123,13 @@ async def request_magic_link(payload: MagicLinkRequest, request: Request, _rate_
     storage.ensure_schema()
 
     email = payload.email.lower().strip()
+
+    recent_count = storage.count_magic_links_recent(email, hours=1)
+    if recent_count >= 3:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many magic link requests. Maximum 3 per hour. Please try again later.",
+        )
 
     user = _get_or_create_user(email)
 
@@ -253,3 +262,110 @@ async def get_me(request: Request):
         "provider": row[3],
         "created_at": row[4].isoformat() if row[4] else None,
     }
+
+
+@router.post("/logout")
+async def logout(request: Request):
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    token = auth_header[7:]
+
+    try:
+        data = decode_token(token, expected_type="access")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    jti = data.get("jti")
+    user_id = data.get("sub")
+    exp = data.get("exp")
+
+    if jti and user_id and exp:
+        from datetime import datetime, timezone
+        expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
+        storage.revoke_token(jti, user_id, expires_at)
+
+    return {"message": "Logged out successfully"}
+
+
+@router.delete("/account")
+async def delete_account(request: Request):
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    token = auth_header[7:]
+
+    try:
+        data = decode_token(token, expected_type="access")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    user_id = data.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    deleted = storage.delete_user_account(user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"message": "Account deleted successfully"}
+
+
+@router.patch("/me")
+async def update_profile(request: Request, name: Optional[str] = None, email: Optional[str] = None):
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    token = auth_header[7:]
+
+    try:
+        data = decode_token(token, expected_type="access")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    user_id = data.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    updated = storage.update_user_profile(user_id, name=name, email=email)
+    if not updated:
+        raise HTTPException(status_code=400, detail="No changes applied")
+
+    return {"message": "Profile updated successfully"}
+
+
+@router.get("/github")
+async def github_auth():
+    return RedirectResponse(url=get_github_auth_url())
+
+
+@router.get("/github/callback")
+async def github_callback(code: str = Query(...)):
+    storage.ensure_schema()
+
+    try:
+        userinfo = await exchange_github_code(code)
+    except Exception as exc:
+        logger.exception("GitHub OAuth exchange failed: %s", exc)
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:8080").strip()
+        return RedirectResponse(url=f"{frontend_url}/auth/callback?error=github_oauth_failed")
+
+    email = userinfo.get("email", "").lower().strip()
+    name = userinfo.get("name", "")
+
+    if not email:
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:8080").strip()
+        return RedirectResponse(url=f"{frontend_url}/auth/callback?error=no_email")
+
+    user = _get_or_create_user(email, name=name, provider="github")
+
+    access = create_access_token(user["id"], email)
+    refresh = create_refresh_token(user["id"])
+
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:8080").strip()
+    return RedirectResponse(
+        url=f"{frontend_url}/auth/callback?access_token={access}&refresh_token={refresh}"
+    )

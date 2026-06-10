@@ -1,6 +1,6 @@
 # AETHER — Complete Task Checklist
 > A comprehensive list of every pending item to bring AETHER from current state to 100% production-ready.
-> Current estimated completion: **~75%**
+> Current estimated completion: **~81%**
 > Last audited: 2026-06-10
 
 ---
@@ -182,31 +182,31 @@
 
 > The auth flow works end-to-end but has gaps for production use.
 
-- [ ] **Implement token revocation/blacklisting** — No way to invalidate a JWT before expiry. Add a `revoked_tokens` table or Redis-based blacklist.
-  - File: `backend/app/services/auth.py`
+- [x] **Implement token revocation/blacklisting** — No way to invalidate a JWT before expiry. Add a `revoked_tokens` table or Redis-based blacklist.
+  - File: `backend/app/services/auth.py`, `backend/app/services/storage.py`
   - Add `revoke_token(token_id)` and `is_token_revoked(token_id)` methods
 
-- [ ] **Add `POST /api/v1/auth/logout` endpoint** — Currently no server-side logout. Client clears localStorage but tokens remain valid.
+- [x] **Add `POST /api/v1/auth/logout` endpoint** — Currently no server-side logout. Client clears localStorage but tokens remain valid.
   - File: `backend/app/api/auth_routes.py`
   - Add endpoint that revokes the current access token
 
-- [ ] **Add `DELETE /api/v1/auth/account` endpoint** — No account deletion flow exists.
+- [x] **Add `DELETE /api/v1/auth/account` endpoint** — No account deletion flow exists.
   - File: `backend/app/api/auth_routes.py`
 
-- [ ] **Remove dead code `_hash_token()` / `_verify_token()`** from `auth.py:65-73` — Defined but never called anywhere. Either wire them into the magic link flow (hash tokens before storing) or delete them.
-  - File: `backend/app/services/auth.py:65-73`
+- [x] **Remove dead code `_hash_token()` / `_verify_token()`** from `auth.py:65-73` — Defined but never called anywhere. Either wire them into the magic link flow (hash tokens before storing) or delete them.
+  - File: `backend/app/services/auth.py`
 
-- [ ] **Add email verification rate limiting** — Magic link endpoint has no rate limit. An attacker could flood a target's email.
-  - File: `backend/app/api/auth_routes.py:118`
+- [x] **Add email verification rate limiting** — Magic link endpoint has no rate limit. An attacker could flood a target's email.
+  - File: `backend/app/api/auth_routes.py`
   - Implement: max 3 magic links per email per hour
 
-- [ ] **Add magic link token expiry enforcement** — Token expiry is stored in DB but the `/verify` endpoint doesn't check `expires_at`.
-  - File: `backend/app/api/auth_routes.py:143`
+- [x] **Add magic link token expiry enforcement** — Token expiry is stored in DB but the `/verify` endpoint doesn't check `expires_at`.
+  - File: `backend/app/api/auth_routes.py`
 
-- [ ] **Add GitHub OAuth support** — Only Google OAuth is implemented. Many developers use GitHub.
+- [x] **Add GitHub OAuth support** — Only Google OAuth is implemented. Many developers use GitHub.
   - File: `backend/app/services/auth.py`, `backend/app/api/auth_routes.py`
 
-- [ ] **Add user profile update endpoint** — No way to update name, email, or preferences after registration.
+- [x] **Add user profile update endpoint** — No way to update name, email, or preferences after registration.
   - File: `backend/app/api/auth_routes.py`
 
 ---
@@ -664,7 +664,7 @@
 | P0 — Missing Methods | 2 | 2 | 0 |
 | P0 — Unmounted Security | 5 | 5 | 0 |
 | P1 — OWASP Validation | 12 | 12 | 0 |
-| P1 — Auth Gaps | 8 | 0 | 8 |
+| P1 — Auth Gaps | 8 | 8 | 0 |
 | P1 — Scan Lifecycle | 6 | 0 | 6 |
 | P1 — Frontend Gaps | 14 | 0 | 14 |
 | P2 — PDF Quality | 3 | 0 | 3 |
@@ -676,7 +676,7 @@
 | P3 — Documentation | 5 | 0 | 5 |
 | P3 — Mobile Audit | 7 | 0 | 7 |
 | P3 — CI/CD | 5 | 0 | 5 |
-| **TOTAL** | **128** | **24** | **104** |
+| **TOTAL** | **128** | **32** | **96** |
 
-> **Current completion: ~75%** (24 of 128 items done)
-> **Estimated effort: 1-3 weeks for a single developer**
+> **Current completion: ~81%** (32 of 128 items done)
+> **Estimated effort: 1-2 weeks for a single developer**

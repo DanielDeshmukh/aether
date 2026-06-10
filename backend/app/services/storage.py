@@ -628,6 +628,27 @@ class ScanStorage:
                     create index if not exists users_email_idx on public.users (email);
                     """
                 )
+                cursor.execute(
+                    """
+                    create table if not exists public.revoked_tokens (
+                        id uuid primary key default gen_random_uuid(),
+                        token_jti text unique not null,
+                        user_id uuid,
+                        revoked_at timestamptz not null default timezone('utc', now()),
+                        expires_at timestamptz not null
+                    );
+                    """
+                )
+                cursor.execute(
+                    """
+                    create index if not exists revoked_tokens_jti_idx on public.revoked_tokens (token_jti);
+                    """
+                )
+                cursor.execute(
+                    """
+                    create index if not exists revoked_tokens_user_idx on public.revoked_tokens (user_id);
+                    """
+                )
             connection.commit()
             self._schema_cache = None
 
@@ -1528,6 +1549,84 @@ class ScanStorage:
         except Exception as error:
             self._logger.error("Failed to mark target verified for domain=%s: %s", domain, str(error))
             return False
+
+    def revoke_token(self, token_jti: str, user_id: str, expires_at: datetime) -> bool:
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        """INSERT INTO public.revoked_tokens (token_jti, user_id, expires_at)
+                           VALUES (%s, %s, %s)
+                           ON CONFLICT (token_jti) DO NOTHING""",
+                        (token_jti, uuid.UUID(str(user_id)), expires_at),
+                    )
+                    return cursor.rowcount > 0
+        except Exception as error:
+            self._logger.error("Failed to revoke token: %s", str(error))
+            return False
+
+    def is_token_revoked(self, token_jti: str) -> bool:
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT 1 FROM public.revoked_tokens WHERE token_jti = %s",
+                        (token_jti,),
+                    )
+                    return cursor.fetchone() is not None
+        except Exception:
+            return False
+
+    def delete_user_account(self, user_id: str) -> bool:
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        "DELETE FROM public.users WHERE id = %s",
+                        (uuid.UUID(str(user_id)),),
+                    )
+                    return cursor.rowcount > 0
+        except Exception as error:
+            self._logger.error("Failed to delete user account: %s", str(error))
+            return False
+
+    def update_user_profile(self, user_id: str, name: str | None = None, email: str | None = None) -> bool:
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    updates = []
+                    params = []
+                    if name is not None:
+                        updates.append("name = %s")
+                        params.append(name)
+                    if email is not None:
+                        updates.append("email = %s")
+                        params.append(email)
+                    if not updates:
+                        return False
+                    params.append(uuid.UUID(str(user_id)))
+                    cursor.execute(
+                        f"UPDATE public.users SET {', '.join(updates)} WHERE id = %s",
+                        params,
+                    )
+                    return cursor.rowcount > 0
+        except Exception as error:
+            self._logger.error("Failed to update user profile: %s", str(error))
+            return False
+
+    def count_magic_links_recent(self, email: str, hours: int = 1) -> int:
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        """SELECT COUNT(*) FROM public.magic_links
+                           WHERE email = %s AND created_at > NOW() - INTERVAL '%s hours'""",
+                        (email, hours),
+                    )
+                    row = cursor.fetchone()
+                    return row[0] if row else 0
+        except Exception:
+            return 0
 
     def fetch_vulnerabilities(self, scan_id: str, user_id: str) -> list[Dict[str, Any]]:
         try:
