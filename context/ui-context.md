@@ -69,7 +69,7 @@ There is no external component library such as shadcn/ui in the current codebase
 - `SidebarTelemetry`
   Recent scans panel and PDF download entrypoint.
 - `Dashboard`
-  Recent scan cards with realtime Supabase updates.
+  Recent scan cards with realtime WebSocket updates.
 - `ScanDetail`
   Full debrief page with verdict, findings, remediation generation, and strategy trace.
 - `JoinUs`

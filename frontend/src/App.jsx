@@ -10,6 +10,7 @@ import Vision from './components/Vision';
 import Footer from './components/Footer';
 import { Routes, Route } from 'react-router-dom';
 import JoinUs from './pages/JoinUs';
+import AuthCallback from './pages/AuthCallback';
 import Dashboard from './pages/Dashboard';
 import ScanDetail from './pages/ScanDetail';
 import { useDocumentTitle } from './lib/useDocumentTitle';
@@ -43,6 +44,7 @@ function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/join-us" element={<JoinUs />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/home" element={<Homepage/>} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/dashboard/:scanId" element={<ScanDetail />} />

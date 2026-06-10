@@ -1,6 +1,7 @@
 from pathlib import Path
 import asyncio
 import base64
+from datetime import datetime, timezone
 import io
 import json
 import logging
@@ -23,11 +24,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.api.aether_routes import router as aether_router
+from app.api.auth_routes import router as auth_router
 from app.orchestrator.attack_orchestrator import AttackOrchestrator, GlobalAbort
 from app.orchestrator.brain import BrainBoundaryError, BrainOrchestrator, BrainStatus
 from app.services.domain_verification import DomainVerificationManager
-from app.services.aether_storage import AetherStorage
 from app.services.git_integration_service import GitIntegrationService
 from app.services.storage import ScanStorage
 from app.api.deps import get_current_user
@@ -54,7 +54,7 @@ def get_allowed_origins() -> List[str]:
 
 
 app = FastAPI(title="AETHER Engine API")
-app.include_router(aether_router)
+app.include_router(auth_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -66,14 +66,14 @@ app.add_middleware(
 
 active_scans: Dict[str, Dict[str, str | bool]] = {}
 brain_sessions: Dict[str, BrainOrchestrator] = {}
+dashboard_connections: set = set()
 scan_storage = ScanStorage()
 domain_verification_manager = DomainVerificationManager(scan_storage)
 git_integration_service = GitIntegrationService(scan_storage)
 
 logger.warning(
-    "PostgreSQL persistence target: database_configured=%s legacy_supabase_configured=%s",
+    "PostgreSQL persistence target: database_configured=%s",
     scan_storage.database_configured(),
-    bool(scan_storage.masked_supabase_url() != "<unset>"),
 )
 
 
@@ -549,11 +549,11 @@ async def api_healthcheck():
         "engine": "O-P-E-A Flow Active",
         "active_scans": len(active_scans),
         "brain_sessions": len(brain_sessions),
-        "supabase_configured": scan_storage.configured(),
+        "auth_configured": bool(os.getenv("AETHER_JWT_SECRET")),
         "gemini_configured": bool(os.getenv("GEMINI_API_KEY")),
         "database_configured": scan_storage.database_configured(),
-        "scan_persistence_ready": scan_storage.configured(),
-        "plan_persistence_supported": scan_storage.supports_plan_persistence() if scan_storage.configured() else False,
+        "scan_persistence_ready": scan_storage.database_configured(),
+        "plan_persistence_supported": scan_storage.supports_plan_persistence() if scan_storage.database_configured() else False,
     }
 
 
@@ -603,7 +603,21 @@ async def create_scan(
         logger.exception("Failed to get or create target: %s", str(error))
         raise HTTPException(status_code=503, detail="TARGET REGISTRATION FAILED. HUNT ABORTED.")
 
-    return create_scan_record(normalized_target, user_id=user_id)
+    result = create_scan_record(normalized_target, user_id=user_id)
+
+    import asyncio
+    asyncio.create_task(broadcast_dashboard_update({
+        "type": "scan_update",
+        "scan": {
+            "id": result["scan_id"],
+            "target_url": normalized_target,
+            "status": "pending",
+            "user_id": user_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        },
+    }))
+
+    return result
 
 
 @app.websocket("/ws/scan/{scan_id}")
@@ -622,7 +636,6 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
     resolved_scan_id = scan_storage.resolve_record_identifier(scan_id)
     resolved_session_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sess_{scan_id}"))
     nvidia_mode = use_nvidia_orchestrator()
-    aether_storage = AetherStorage() if not nvidia_mode else None
 
     try:
         await safe_send_json(
@@ -777,7 +790,6 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
                 user_id=str(user_id) if user_id else None,
                 resolved_scan_id=resolved_scan_id,
                 resolved_session_id=resolved_session_id,
-                storage=aether_storage,
             ):
                 if not active_scans.get(scan_id, {}).get("active"):
                     brain.terminate()
@@ -1097,3 +1109,51 @@ async def websocket_remediation(websocket: WebSocket, scan_id: str):
                 "msg": "REMEDIATION GENERATION FAILED. REVIEW BACKEND LOGS AND RETRY.",
             },
         )
+
+
+@app.websocket("/ws/dashboard")
+async def websocket_dashboard(websocket: WebSocket):
+    await websocket.accept()
+
+    token = websocket.query_params.get("token", "")
+    if not token:
+        await websocket.send_json({"type": "error", "msg": "AUTHENTICATION REQUIRED."})
+        await websocket.close(code=1008)
+        return
+
+    import jwt as pyjwt
+
+    jwt_secret = os.getenv("AETHER_JWT_SECRET", "").strip()
+    if not jwt_secret:
+        await websocket.send_json({"type": "error", "msg": "AUTH NOT CONFIGURED."})
+        await websocket.close(code=1008)
+        return
+
+    try:
+        payload = pyjwt.decode(token, jwt_secret, algorithms=["HS256"], audience="authenticated")
+        user_id = payload.get("sub")
+        if not user_id:
+            raise ValueError("No subject")
+    except Exception:
+        await websocket.send_json({"type": "error", "msg": "INVALID TOKEN."})
+        await websocket.close(code=1008)
+        return
+
+    dashboard_connections.add(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        dashboard_connections.discard(websocket)
+
+
+async def broadcast_dashboard_update(payload: dict):
+    disconnected = set()
+    for ws in dashboard_connections:
+        try:
+            await ws.send_json(payload)
+        except Exception:
+            disconnected.add(ws)
+    dashboard_connections.difference_update(disconnected)

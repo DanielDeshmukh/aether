@@ -1,39 +1,48 @@
 import os
+import uuid
 from typing import Annotated
+
+import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from supabase import create_client, Client
 
 security = HTTPBearer()
 
-supabase: Client = create_client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_ANON_KEY")
-)
-
-def get_supabase():
-    return supabase
 
 async def get_current_user(
     creds: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-    supabase = Depends(get_supabase)
-):
+) -> str:
     token = creds.credentials
 
-    err = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-    )
+    secret = os.getenv("AETHER_JWT_SECRET", "").strip()
+    if not secret:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="JWT secret not configured",
+        )
 
     try:
-        response = supabase.auth.get_user(token) # Use the initialized supabase client
-        user = response.user
+        payload = jwt.decode(
+            token,
+            secret,
+            algorithms=["HS256"],
+            audience="authenticated",
+        )
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token: missing subject",
+            )
+        return user_id
 
-        if not user:
-            raise err
-
-        return user.id
-
-    except Exception as e:
-        print("AUTH ERROR:", e)
-        raise err
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token expired",
+        )
+    except jwt.InvalidTokenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+        ) from exc

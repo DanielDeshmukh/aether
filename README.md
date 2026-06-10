@@ -38,7 +38,7 @@ AETHER is structured as a modular SaaS platform designed for high-concurrency te
 | **Orchestrator** | LangGraph / Python | The "Brain." Manages the stateful reasoning loop and attack planning. |
 | **Engine** | FastAPI + Playwright + Safety & Rate Limiting | The execution layer. Interacts with the DOM, delivers payloads, and enforces operational safety gates with request throttling and scan-identification headers. |
 | **Intelligence** | Gemini 2.0 Flash / Claude | Interprets HTTP responses and generates adaptive bypass payloads. |
-| **Backend** | Supabase / PostgreSQL | Manages auth, scan persistence, and the "Flaw & Remediation" database. |
+| **Backend** | PostgreSQL (psycopg) + Custom JWT Auth | Manages auth, scan persistence, and the "Flaw & Remediation" database. |
 
 ---
 
@@ -60,7 +60,7 @@ AETHER is structured as a modular SaaS platform designed for high-concurrency te
 
 | Milestone | Notes |
 | :--- | :--- |
-| **Setup** | Repository init, PostgreSQL schema foundation, and Supabase-backed auth wiring. |
+| **Setup** | Repository init, PostgreSQL schema foundation, and custom JWT auth wiring. |
 | **Database Persistence Resilience** | Stabilized the transactional `persist_full_pipeline` path and hardened scan/session/profile persistence. |
 | **Dynamic Profile Normalization** | Normalized profile payload generation so automated and user-linked profiles persist safely even with nullable identity fields. |
 | **NVIDIA Agentic Reasoning Loop Integration** | Bridged Nemotron-guided orchestration into the live WebSocket stream with tenant-safe persistence handoff. |

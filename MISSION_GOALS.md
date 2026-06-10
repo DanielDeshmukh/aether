@@ -28,7 +28,7 @@ The engine executes a continuous, stateful loop to ensure precision:
 * **Sybil Defense:** Automatic flagging of accounts sharing the same IP if they exceed 3 unique emails per 24h window.
 
 ### Self-Preservation (Security Hardening)
-* **Injection Defense:** Mandatory parameterized queries for all Supabase/DB interactions; strict Pydantic schema validation.
+* **Injection Defense:** Mandatory parameterized queries for all DB interactions; strict Pydantic schema validation.
 * **SSRF Prevention:** Validation of `target_url` against internal/private IP ranges (e.g., `127.0.0.1`, `10.0.0.0/8`, `192.168.0.0/16`).
 * **DDoS Mitigation:** Global API throttling via `SlowAPI` to prevent engine exhaustion and resource denial.
 

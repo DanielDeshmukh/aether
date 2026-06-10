@@ -1,67 +1,63 @@
 import React, { useEffect, useState } from 'react';
 import { FcGoogle } from 'react-icons/fc';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabaseClient';
+import { auth } from '../lib/auth';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 const JoinUs = () => {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useState('');
   const navigate = useNavigate();
-  const homeRedirectUrl = `${window.location.origin}/home`;
   useDocumentTitle('Authentication');
 
   useEffect(() => {
-    const syncSession = async () => {
-      const { data, error } = await supabase.auth.getSession();
+    if (auth.isAuthenticated()) {
+      navigate('/home', { replace: true });
+    }
 
-      if (!error && data.session) {
-        navigate('/home', { replace: true });
-      }
-    };
-
-    syncSession();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session) {
+    const unsubscribe = auth.onAuthStateChanged(() => {
+      if (auth.isAuthenticated()) {
         navigate('/home', { replace: true });
       }
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    return unsubscribe;
   }, [navigate]);
 
   const handleMagicLinkSignIn = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: homeRedirectUrl,
-      },
-    });
-    if (error) console.error('Error sending magic link:', error);
-    setTimeout(() => setIsLoading(false), 2000); 
+    setMessage('');
+
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL?.trim() || '';
+      const url = baseUrl ? `${baseUrl}/api/v1/auth/magic-link` : '/api/v1/auth/magic-link';
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.toLowerCase().trim() }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || 'Failed to send magic link');
+      }
+
+      setMessage('MAGIC LINK SENT. CHECK YOUR EMAIL.');
+    } catch (err) {
+      console.error('Error sending magic link:', err);
+      setMessage('FAILED TO SEND MAGIC LINK. PLEASE RETRY.');
+    } finally {
+      setTimeout(() => setIsLoading(false), 2000);
+    }
   };
 
-  const handleGoogleSignIn = async () => {
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: homeRedirectUrl,
-      queryParams: {
-        access_type: 'offline',
-        prompt: 'consent',
-      },
-    },
-  });
-
-  if (error) console.error('Error signing in with Google:', error);
-};
+  const handleGoogleSignIn = () => {
+    const baseUrl = import.meta.env.VITE_API_URL?.trim() || '';
+    const url = baseUrl ? `${baseUrl}/api/v1/auth/google` : '/api/v1/auth/google';
+    window.location.href = url;
+  };
 
   return (
     <section className="min-h-screen bg-lambo-black flex items-center justify-center px-5 py-20 relative overflow-hidden font-mono">
@@ -83,10 +79,7 @@ const JoinUs = () => {
           </p>
         </div>
 
-        {/* Auth Card */}
         <div className="bg-[#0c0c0d] border border-lambo-charcoal/30 p-8 rounded-2xl shadow-2xl">
-          
-          {/* Google Sign In */}
           <button
             onClick={handleGoogleSignIn}
             className="w-full flex items-center justify-center gap-3 bg-transparent border border-lambo-charcoal/50 hover:border-lambo-gold/50 py-4 rounded-xl transition-all duration-300 group"
@@ -106,7 +99,6 @@ const JoinUs = () => {
             </span>
           </div>
 
-          {/* Magic Link Form */}
           <form onSubmit={handleMagicLinkSignIn} className="space-y-6">
             <div>
               <label className="block text-[10px] text-lambo-gold uppercase tracking-widest mb-2 font-bold pl-1">
@@ -136,9 +128,14 @@ const JoinUs = () => {
               )}
             </button>
           </form>
+
+          {message && (
+            <div className="mt-4 text-center text-[10px] font-bold tracking-[0.2em] text-lambo-gold uppercase">
+              {message}
+            </div>
+          )}
         </div>
 
-        {/* Footer Note */}
         <p className="mt-8 text-center text-[9px] text-lambo-ash/40 uppercase tracking-[0.2em] leading-loose">
           By continuing, you authorize the initialization of <br />
           biometric-equivalent cryptographic loops.

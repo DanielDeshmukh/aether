@@ -71,10 +71,8 @@ brain_sessions: Dict[str, BrainOrchestrator] = {}
 scan_storage = ScanStorage()
 
 logger.warning(
-    "Supabase backend target: url=%s configured=%s service_role=%s",
-    scan_storage.masked_supabase_url(),
-    scan_storage.configured(),
-    scan_storage.using_service_role_key(),
+    "PostgreSQL persistence target: database_configured=%s",
+    scan_storage.database_configured(),
 )
 
 
@@ -425,11 +423,11 @@ async def api_healthcheck():
         "engine": "O-P-E-A Flow Active",
         "active_scans": len(active_scans),
         "brain_sessions": len(brain_sessions),
-        "supabase_configured": scan_storage.configured(),
+        "auth_configured": bool(os.getenv("AETHER_JWT_SECRET")),
         "gemini_configured": bool(os.getenv("GEMINI_API_KEY")),
         "database_configured": scan_storage.database_configured(),
-        "scan_persistence_ready": scan_storage.configured(),
-        "plan_persistence_supported": scan_storage.supports_plan_persistence() if scan_storage.configured() else False,
+        "scan_persistence_ready": scan_storage.database_configured(),
+        "plan_persistence_supported": scan_storage.supports_plan_persistence() if scan_storage.database_configured() else False,
     }
 
 

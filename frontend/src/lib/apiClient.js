@@ -1,14 +1,14 @@
-import { supabase } from "./supabaseClient";
+import { auth } from "./auth";
+import { buildApiUrl } from "./api";
 
 export async function apiRequest(url, options = {}) {
-  const { data } = await supabase.auth.getSession();
+  const token = await auth.getValidAccessToken();
 
-  if (!data.session) {
+  if (!token) {
     throw new Error("User not authenticated");
   }
 
-  const token = data.session.access_token;
-  const response = await fetch(`http://127.0.0.1:8000${url}`, {
+  const response = await fetch(buildApiUrl(url), {
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -16,6 +16,25 @@ export async function apiRequest(url, options = {}) {
       ...(options.headers || {}),
     },
   });
+
+  if (response.status === 401) {
+    const refreshed = await auth.refreshAccessToken();
+    if (!refreshed) {
+      throw new Error("Session expired. Please log in again.");
+    }
+    const retryResponse = await fetch(buildApiUrl(url), {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${refreshed}`,
+        ...(options.headers || {}),
+      },
+    });
+    if (!retryResponse.ok) {
+      throw new Error("Request failed. Please retry.");
+    }
+    return retryResponse;
+  }
 
   if (response.status === 403) {
     throw new Error("Scan limit reached. You have used all 3 scans for this MVP account.");

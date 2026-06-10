@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
 import { apiRequest } from '../lib/apiClient';
 
 const InputUrl = ({ onTerminalStart, className = '', consentConfirmed = false, onConsentChange }) => {

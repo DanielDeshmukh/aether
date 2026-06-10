@@ -2,7 +2,7 @@
 
 ## Overview
 
-AETHER is a security scanning platform with a React frontend and FastAPI backend that lets an authenticated operator launch bounded vulnerability hunts against verified targets, stream the engine's reasoning over WebSockets, persist scan artifacts in Postgres/Supabase-backed storage, and review scan debriefs plus generated remediation guidance in the dashboard.
+AETHER is a security scanning platform with a React frontend and FastAPI backend that lets an authenticated operator launch bounded vulnerability hunts against verified targets, stream the engine's reasoning over WebSockets, persist scan artifacts in PostgreSQL-backed storage, and review scan debriefs plus generated remediation guidance in the dashboard.
 
 ## Goals
 
@@ -13,9 +13,9 @@ AETHER is a security scanning platform with a React frontend and FastAPI backend
 
 ## Core User Flow
 
-1. User authenticates from `/join-us` with Google OAuth or email magic link through Supabase.
+1. User authenticates from `/join-us` with Google OAuth or email magic link through custom JWT auth.
 2. User opens `/home`, enters a target URL, and confirms ownership or written authorization.
-3. Frontend calls `POST /api/v1/scans` with the Supabase access token and consent flag.
+3. Frontend calls `POST /api/v1/scans` with the JWT access token and consent flag.
 4. Backend validates auth, quota, consent, and target safety, then creates an in-memory scan session.
 5. Frontend connects to `/ws/scan/{scan_id}` and receives staged reasoning, execution logs, findings, and final report data.
 6. Backend persists scan state, results, findings, profiles, and consent logs into the database.
@@ -43,7 +43,7 @@ AETHER is a security scanning platform with a React frontend and FastAPI backend
 ### Persistence And Reporting
 
 - Postgres persistence for scans, sessions, findings, profiles, and consent logs
-- Dashboard list view with Supabase realtime updates
+- Dashboard list view with WebSocket-based realtime updates
 - Scan debrief detail screen with persisted plan and verdict
 - PDF report generation through Playwright
 - Remediation package generation for findings
@@ -59,7 +59,7 @@ AETHER is a security scanning platform with a React frontend and FastAPI backend
 
 ### In Scope
 
-- Supabase-authenticated scan initiation
+- JWT-authenticated scan initiation
 - FastAPI APIs and WebSocket orchestration for scan execution
 - Persistence to the `scans`, `scan_sessions`, `vulnerabilities`, `profiles`, and `consent_logs` tables
 - Domain verification checks before active validation

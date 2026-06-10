@@ -7,14 +7,6 @@ import babel from '@rolldown/plugin-babel'
 export default defineConfig(({ mode }) => {
   const envDir = path.resolve(__dirname, '..')
   const env = loadEnv(mode, envDir, '')
-  const requiredEnvVars = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY']
-  const missingEnvVars = requiredEnvVars.filter((key) => !env[key]?.trim())
-
-  if (missingEnvVars.length > 0) {
-    throw new Error(
-      `Missing required environment variables in ${path.join(envDir, '.env')}: ${missingEnvVars.join(', ')}`
-    )
-  }
 
   return {
     envDir,

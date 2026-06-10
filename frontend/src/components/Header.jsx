@@ -1,13 +1,13 @@
 import React from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import Logo from '/images/logo.png';
-import { supabase } from '../lib/supabaseClient';
+import { auth } from '../lib/auth';
 
 const Header = () => {
   const navigate = useNavigate();
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
+  const handleSignOut = () => {
+    auth.clearTokens();
     navigate('/join-us', { replace: true });
   };
 

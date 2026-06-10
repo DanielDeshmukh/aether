@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Header from '../components/Header';
 import { buildWsUrl } from '../lib/api';
-import { supabase } from '../lib/supabaseClient';
+import { auth } from '../lib/auth';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
+import { apiRequest } from '../lib/apiClient';
 
 const normalizePlan = (initialPlan) => {
   if (typeof initialPlan === 'string') {
@@ -62,22 +63,15 @@ const ScanDetail = () => {
       setIsLoading(true);
       setError('');
 
-      const { data, error: fetchError } = await supabase
-        .from('scans')
-        .select('*')
-        .eq('id', scanId)
-        .limit(1)
-        .maybeSingle();
-
-      if (!isMounted) {
-        return;
-      }
-
-      if (fetchError) {
-        setError(fetchError.message.toUpperCase());
-        setScan(null);
-      } else {
+      try {
+        const response = await apiRequest(`/api/v1/scans/${scanId}`);
+        const data = await response.json();
+        if (!isMounted) return;
         setScan(data ?? null);
+      } catch (err) {
+        if (!isMounted) return;
+        setError(err.message?.toUpperCase() || 'FAILED TO LOAD SCAN');
+        setScan(null);
       }
 
       setIsLoading(false);
@@ -106,10 +100,9 @@ const ScanDetail = () => {
   const handleRemediate = async (vulnId) => {
     setLoadingFixId(vulnId);
     setRemediationError('');
-    
-    const { data: { session } } = await supabase.auth.getSession();
-    const userId = session?.user?.id;
-    
+
+    const userId = auth.getUserId();
+
     const socket = new WebSocket(buildWsUrl(`/ws/remediation/${scan.id}?user_id=${userId}`));
 
     socket.onopen = () => {
@@ -155,8 +148,7 @@ const ScanDetail = () => {
     setGitPushStatus('');
     setRemediationError('');
 
-    const { data: { session } } = await supabase.auth.getSession();
-    const userId = session?.user?.id;
+    const userId = auth.getUserId();
 
     const socket = new WebSocket(buildWsUrl(`/ws/remediation/${scan.id}?user_id=${userId}`));
 

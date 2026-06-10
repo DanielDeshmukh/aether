@@ -6,9 +6,9 @@
 | --- | --- | --- |
 | Frontend framework | React 19 + Vite + React Router | Marketing pages, authenticated operator UI, live console, dashboard routes |
 | Styling | Tailwind CSS + custom utility classes | Lamborghini-inspired dark theme and panel/button shapes |
-| Auth | Supabase Auth | Google OAuth and magic-link authentication, frontend session source |
+| Auth | Custom JWT Auth (PyJWT) | Google OAuth and magic-link authentication, frontend session source |
 | Backend framework | FastAPI + WebSockets | Scan APIs, live streaming, report download, remediation socket |
-| Persistence | PostgreSQL via `psycopg` with Supabase-hosted schema conventions | Stores scans, sessions, findings, profiles, consent logs, target verification data |
+| Persistence | PostgreSQL via `psycopg` with direct SQL | Stores scans, sessions, findings, profiles, consent logs, target verification data |
 | Browser automation | Playwright | Tech stack recon, validation lanes, PDF generation |
 | AI orchestration | Google GenAI plus NVIDIA-hosted OpenAI-compatible models | Initial planning, final verdicts, remediation generation, optional validation orchestration |
 | Network tooling | `httpx`, `requests`, custom validators | Safety checks, preflight requests, verification, service integrations |
@@ -32,12 +32,12 @@
 
 ## Runtime Shape
 
-- The frontend authenticates with Supabase and sends bearer tokens to the backend.
+- The frontend authenticates with custom JWT auth and sends bearer tokens to the backend.
 - `POST /api/v1/scans` creates an in-memory active scan entry after auth, quota, consent, and SSRF validation.
 - `/ws/scan/{scan_id}` drives the main operator experience by streaming plan, execute, analyze, and remediation-related events.
 - `BrainOrchestrator` is the default hunt loop for planning, bounded audits, and verdict generation.
 - `AttackOrchestrator` is the stricter active-validation path for allowlisted hosts and Playwright-backed OWASP lane checks.
-- Completed scans are read back through REST and directly from Supabase in parts of the frontend.
+- Completed scans are read back through REST and WebSocket endpoints.
 
 ## Storage Model
 
@@ -50,8 +50,8 @@
 
 ## Auth And Access Model
 
-- Frontend auth state comes from Supabase.
-- Backend REST APIs expect `Authorization: Bearer <token>` and resolve the user through Supabase auth helpers.
+- Frontend auth state comes from custom JWT tokens stored in localStorage.
+- Backend REST APIs expect `Authorization: Bearer <token>` and resolve the user through JWT validation.
 - Scan records are tenant-scoped by `user_id`; list, fetch, remediation persistence, and report download paths all check user ownership.
 - Active validation requires both an authenticated user and a verified target record.
 

@@ -8,7 +8,6 @@ from typing import Any, Dict, Iterable, Iterator, List
 from urllib.parse import urlparse
 
 import psycopg
-import requests
 from psycopg import sql
 from psycopg.errors import CheckViolation, ForeignKeyViolation, UniqueViolation
 from psycopg.types.json import Jsonb
@@ -21,13 +20,6 @@ from app.services.validators import validate_and_build_rows
 
 class ScanStorage:
     def __init__(self) -> None:
-        self.supabase_url = self._get_first_env("SUPABASE_URL", "VITE_SUPABASE_URL")
-        self.supabase_key = self._get_first_env(
-            "SUPABASE_SERVICE_ROLE_KEY",
-            "VITE_SUPABASE_SERVICE_ROLE_KEY",
-            "SUPABASE_KEY",
-            "VITE_SUPABASE_ANON_KEY",
-        )
         self.database_url = self._normalize_database_url(
             self._get_first_env("DATABASE_URL", "DB_CONNECTION_STRING")
         )
@@ -67,12 +59,6 @@ class ScanStorage:
     def configured(self) -> bool:
         return self.database_configured()
 
-    def masked_supabase_url(self) -> str:
-        return self.mask_value(self.supabase_url)
-
-    def using_service_role_key(self) -> bool:
-        return False
-
     def database_configured(self) -> bool:
         return bool(self.database_url) and not self.database_url.lower().startswith("your_")
 
@@ -104,54 +90,46 @@ class ScanStorage:
         with pool.connection() as connection:
             yield connection
 
-    def get_public_schema(self) -> Dict[str, Any]:
-        if self._schema_cache is not None:
-            return self._schema_cache
-
-        if not self.supabase_url or not self.supabase_key:
-            return {}
-
-        try:
-            response = requests.get(
-                f"{self.supabase_url}/rest/v1/",
-                headers={
-                    "apikey": self.supabase_key,
-                    "Authorization": f"Bearer {self.supabase_key}",
-                    "Accept": "application/openapi+json",
-                },
-                timeout=30,
-            )
-            response.raise_for_status()
-            self._schema_cache = response.json()
-        except requests.RequestException:
-            self._schema_cache = {}
-        return self._schema_cache
-
-    def get_table_definition(self, table_name: str) -> Dict[str, Any]:
-        schema = self.get_public_schema()
-        return schema.get("definitions", {}).get(table_name, {})
-
-    def get_table_properties(self, table_name: str) -> Dict[str, Any]:
-        definition = self.get_table_definition(table_name)
-        return definition.get("properties", {})
-
     def supports_plan_persistence(self) -> bool:
-        properties = self.get_table_properties(self.table_name)
-        expected_columns = {"id", "status", "target_url", "initial_plan", "thought_trace", "threat_level", "user_id", "results", "final_report", "remediations"}
-        return expected_columns.issubset(properties.keys())
+        if not self.database_configured():
+            return False
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_schema = 'public' AND table_name = %s",
+                        (self.table_name,),
+                    )
+                    columns = {row[0] for row in cur.fetchall()}
+                    expected = {"id", "status", "target_url", "initial_plan", "thought_trace", "threat_level", "user_id", "results", "final_report", "remediations"}
+                    return expected.issubset(columns)
+        except Exception:
+            return False
 
     def supports_hunt_persistence(self) -> bool:
-        schema = self.get_public_schema().get("definitions", {})
-        return all(
-            name in schema
-            for name in {
-                self.table_name,
-                self.sessions_table,
-                self.vulnerabilities_table,
-                self.profiles_table,
-                self.consent_logs_table,
-            }
-        )
+        if not self.database_configured():
+            return False
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT table_name FROM information_schema.tables "
+                        "WHERE table_schema = 'public'"
+                    )
+                    tables = {row[0] for row in cur.fetchall()}
+                    return all(
+                        name in tables
+                        for name in {
+                            self.table_name,
+                            self.sessions_table,
+                            self.vulnerabilities_table,
+                            self.profiles_table,
+                            self.consent_logs_table,
+                        }
+                    )
+        except Exception:
+            return False
 
     def build_record_identifier(self, scan_id: str) -> str:
         return str(uuid.uuid5(uuid.NAMESPACE_URL, scan_id))
@@ -171,7 +149,7 @@ class ScanStorage:
             return None
 
     def _scan_query(self, user_id: str, select_clause: str = "*") -> Any:
-        raise NotImplementedError("Legacy Supabase query path has been disabled.")
+        raise NotImplementedError("Legacy query path has been disabled.")
 
     def _fetch_owned_scan(self, scan_id: str, user_id: str, select_clause: str = "*") -> Dict[str, Any] | None:
         resolved_scan_id = uuid.UUID(self.resolve_record_identifier(scan_id))
@@ -613,6 +591,41 @@ class ScanStorage:
                 cursor.execute(
                     """
                     create index if not exists scan_sessions_scan_id_idx on public.scan_sessions (scan_id);
+                    """
+                )
+                cursor.execute(
+                    """
+                    create table if not exists public.users (
+                        id uuid primary key default gen_random_uuid(),
+                        email text unique not null,
+                        name text,
+                        provider text not null default 'email',
+                        created_at timestamptz not null default timezone('utc', now()),
+                        last_login_at timestamptz
+                    );
+                    """
+                )
+                cursor.execute(
+                    """
+                    create table if not exists public.magic_links (
+                        id uuid primary key default gen_random_uuid(),
+                        token text unique not null,
+                        email text not null,
+                        user_id uuid references public.users(id) on delete cascade,
+                        expires_at timestamptz not null,
+                        used boolean not null default false,
+                        created_at timestamptz not null default timezone('utc', now())
+                    );
+                    """
+                )
+                cursor.execute(
+                    """
+                    create index if not exists magic_links_token_idx on public.magic_links (token);
+                    """
+                )
+                cursor.execute(
+                    """
+                    create index if not exists users_email_idx on public.users (email);
                     """
                 )
             connection.commit()

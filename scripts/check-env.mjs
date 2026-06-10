@@ -6,12 +6,9 @@ const envPath = path.join(rootDir, '.env');
 const examplePath = path.join(rootDir, '.env.example');
 
 const requiredVars = [
-  'SUPABASE_URL',
-  'SUPABASE_SERVICE_ROLE_KEY',
+  'AETHER_JWT_SECRET',
   'DATABASE_URL',
   'FRONTEND_URL',
-  'VITE_SUPABASE_URL',
-  'VITE_SUPABASE_ANON_KEY',
 ];
 
 const placeholderPatterns = [

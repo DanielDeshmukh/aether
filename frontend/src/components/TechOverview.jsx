@@ -29,7 +29,7 @@ const TechOverview = () => {
                 { label: "Orchestrator", value: "LangGraph / Python", detail: "Decision Engine" },
                 { label: "Intelligence", value: "Gemini 1.5 Pro", detail: "Payload Generation" },
                 { label: "Testing Engine", value: "FastAPI / Playwright", detail: "Execution Layer" },
-                { label: "Infrastructure", value: "Supabase / React", detail: "SaaS Management" }
+                { label: "Infrastructure", value: "PostgreSQL / React", detail: "SaaS Management" }
               ].map((item, i) => (
                 <div key={i} className="group border-l border-lambo-gold/20 pl-4 hover:border-lambo-gold transition-colors duration-300">
                   <h4 className="text-lambo-white text-xs mb-1 font-bold uppercase tracking-widest group-hover:text-lambo-gold">{item.label}</h4>

@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
 import { apiRequest } from '../lib/apiClient';
 
 const SidebarTelemetry = () => {
@@ -11,11 +10,13 @@ const SidebarTelemetry = () => {
 
     useEffect(() => {
         const loadScans = async () => {
-            const { data, error: fError } = await supabase
-                .from('scans')
-                .select('id, target_url, status, created_at, threat_level')
-                .order('created_at', { ascending: false }).limit(3);
-            if (!fError) setScans(data ?? []);
+            try {
+                const response = await apiRequest('/api/v1/scans');
+                const data = await response.json();
+                setScans((data ?? []).slice(0, 3));
+            } catch {
+                setScans([]);
+            }
             setIsLoading(false);
         };
         loadScans();

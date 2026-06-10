@@ -18,7 +18,7 @@
 ## React
 
 - Pages own route composition; reusable UI and workflow primitives belong in `frontend/src/components`.
-- Network access that depends on Supabase auth should go through shared helpers like `apiRequest` or `buildWsUrl`.
+- Network access that depends on JWT auth should go through shared helpers like `apiRequest` or `buildWsUrl`.
 - State should stay local to the active workflow unless multiple screens truly share it.
 - Keep the authenticated UI aligned with the existing dark operator-console design system rather than introducing generic component-library patterns.
 
@@ -31,7 +31,7 @@
 
 ## API And WebSocket Contracts
 
-- Authenticated REST routes should expect Supabase bearer tokens and resolve the owning user before touching persisted resources.
+- Authenticated REST routes should expect JWT bearer tokens and resolve the owning user before touching persisted resources.
 - Scan creation must enforce quota, consent confirmation, and SSRF safety before allocating engine work.
 - WebSocket payloads should keep predictable keys such as `type`, `phase`, `msg`, and `brain` so the console UI stays stable.
 - Persisted scan data must remain serializable to JSON because the frontend reads `initial_plan`, `results`, `final_report`, and `remediations` directly.
@@ -53,7 +53,7 @@
 
 - `frontend/src/pages/` contains route-level screens.
 - `frontend/src/components/` contains reusable UI and workflow components.
-- `frontend/src/lib/` contains frontend integration helpers such as API, WebSocket, and Supabase client setup.
+- `frontend/src/lib/` contains frontend integration helpers such as API, WebSocket, and auth client setup.
 - `backend/app/orchestrator/` contains reasoning, execution, remediation, and agent loop logic.
 - `backend/app/services/` contains persistence, verification, monitoring, and integration services.
 - `backend/app/tools/` and `backend/app/engine/` contain lower-level scan and validation helpers.

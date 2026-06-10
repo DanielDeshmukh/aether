@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
-import { supabase } from '../lib/supabaseClient';
+import { auth } from '../lib/auth';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 import { apiRequest } from '../lib/apiClient';
+import { buildWsUrl } from '../lib/api';
 
 const STATUS_STYLES = {
   plan_hold: 'bg-lambo-gold/10 text-lambo-gold border-lambo-gold/30',
@@ -77,6 +78,7 @@ const Dashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const wsRef = useRef(null);
   useDocumentTitle('Dashboard');
 
   useEffect(() => {
@@ -102,35 +104,50 @@ const Dashboard = () => {
 
     loadScans();
 
-    const channel = supabase
-      .channel('dashboard-scans')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'scans' },
-        (payload) => {
-          if (!isMounted) {
-            return;
-          }
+    const connectDashboardWs = () => {
+      const token = auth.getAccessToken();
+      if (!token) return;
 
-          if (payload.eventType === 'DELETE') {
-            setScans((current) => current.filter((scan) => scan.id !== payload.old.id));
-            return;
-          }
+      const ws = new WebSocket(buildWsUrl(`/ws/dashboard?token=${token}`));
+      wsRef.current = ws;
 
-          const nextRecord = payload.new;
-          setScans((current) => {
-            const filtered = current.filter((scan) => scan.id !== nextRecord.id);
-            return [nextRecord, ...filtered].sort(
-              (left, right) => new Date(right.created_at ?? 0).getTime() - new Date(left.created_at ?? 0).getTime()
-            ).slice(0, 12);
-          });
+      ws.onmessage = (event) => {
+        if (!isMounted) return;
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.type === 'scan_update' && payload.scan) {
+            const nextRecord = payload.scan;
+            setScans((current) => {
+              const filtered = current.filter((scan) => scan.id !== nextRecord.id);
+              return [nextRecord, ...filtered].sort(
+                (left, right) => new Date(right.created_at ?? 0).getTime() - new Date(left.created_at ?? 0).getTime()
+              ).slice(0, 12);
+            });
+          }
+        } catch {
+          // ignore malformed messages
         }
-      )
-      .subscribe();
+      };
+
+      ws.onclose = () => {
+        if (isMounted) {
+          setTimeout(connectDashboardWs, 3000);
+        }
+      };
+
+      ws.onerror = () => {
+        ws.close();
+      };
+    };
+
+    connectDashboardWs();
 
     return () => {
       isMounted = false;
-      supabase.removeChannel(channel);
+      if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.close();
+      }
     };
   }, []);
 
