@@ -1,8 +1,3 @@
-from dotenv import load_dotenv
-load_dotenv()
-
-from pathlib import Path
-
 import asyncio
 import base64
 import io
@@ -16,13 +11,6 @@ from pathlib import Path
 from typing import Dict, List
 from urllib.parse import urlparse
 
-logo_path = Path(r"D:\Vs Code\Aether\aether\frontend\public\images\logo.png")
-logo_uri = logo_path.as_uri()
-# Windows-specific fix for Playwright and asyncio subprocess handling
-if sys.platform == "win32":
-    import asyncio
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,6 +23,13 @@ from app.api.deps import get_current_user
 from app.tools.validators import is_safe_url
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+
+# Windows-specific fix for Playwright and asyncio subprocess handling
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
+_logo_path = Path(__file__).resolve().parents[2] / "frontend" / "public" / "images" / "logo.png"
+logo_uri = _logo_path.as_uri() if _logo_path.exists() else ""
 
 logger = logging.getLogger("aether.api")
 
@@ -162,6 +157,16 @@ def extract_client_ip(request: Request) -> str | None:
     if forwarded_for:
         return forwarded_for
     return request.client.host if request.client else None
+
+
+def _api_response(success: bool, data: dict | list | None = None, error: str | None = None) -> dict:
+    """Standardized API response wrapper."""
+    response: dict = {"success": success}
+    if data is not None:
+        response["data"] = data
+    if error is not None:
+        response["error"] = error
+    return response
 
 
 def generate_pdf_sync(temp_path: str) -> bytes:

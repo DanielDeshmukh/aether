@@ -3,10 +3,8 @@ import { apiRequest } from '../lib/apiClient';
 
 const SidebarTelemetry = () => {
     const [scans, setScans] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
     const [selectedScan, setSelectedScan] = useState(null);
     const [isDownloading, setIsDownloading] = useState(false);
-    const [error, setError] = useState('');
 
     useEffect(() => {
         const loadScans = async () => {
@@ -17,7 +15,6 @@ const SidebarTelemetry = () => {
             } catch {
                 setScans([]);
             }
-            setIsLoading(false);
         };
         loadScans();
     }, []);
@@ -37,8 +34,8 @@ const SidebarTelemetry = () => {
             link.download = `aether-diagnosis-${sanitized}.pdf`;
             link.click();
             setSelectedScan(null);
-        } catch (e) {
-            setError('DOWNLOAD_FAILED');
+        } catch {
+            console.error('Download failed');
         } finally {
             setIsDownloading(false);
         }

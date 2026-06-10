@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '../lib/auth';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
@@ -6,30 +6,32 @@ import { useDocumentTitle } from '../lib/useDocumentTitle';
 const AuthCallback = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [status, setStatus] = useState('Processing...');
   useDocumentTitle('Authentication');
 
-  useEffect(() => {
+  const { status, shouldRedirect, redirectPath } = useMemo(() => {
     const accessToken = searchParams.get('access_token');
     const refreshToken = searchParams.get('refresh_token');
     const error = searchParams.get('error');
 
     if (error) {
-      setStatus('Authentication failed. Please try again.');
-      setTimeout(() => navigate('/join-us', { replace: true }), 2000);
-      return;
+      return { status: 'Authentication failed. Please try again.', shouldRedirect: true, redirectPath: '/join-us' };
     }
 
     if (accessToken) {
       auth.setTokens(accessToken, refreshToken);
-      setStatus('Access granted. Redirecting...');
-      setTimeout(() => navigate('/home', { replace: true }), 500);
-      return;
+      return { status: 'Access granted. Redirecting...', shouldRedirect: true, redirectPath: '/home' };
     }
 
-    setStatus('Invalid authentication response.');
-    setTimeout(() => navigate('/join-us', { replace: true }), 2000);
-  }, [searchParams, navigate]);
+    return { status: 'Invalid authentication response.', shouldRedirect: true, redirectPath: '/join-us' };
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (shouldRedirect) {
+      const delay = redirectPath === '/home' ? 500 : 2000;
+      const timer = setTimeout(() => navigate(redirectPath, { replace: true }), delay);
+      return () => clearTimeout(timer);
+    }
+  }, [shouldRedirect, redirectPath, navigate]);
 
   return (
     <section className="min-h-screen bg-lambo-black flex items-center justify-center px-5 font-mono">

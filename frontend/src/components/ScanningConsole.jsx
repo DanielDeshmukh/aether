@@ -20,23 +20,25 @@ const ScanningConsole = ({ scanSession, className = '' }) => {
     const [brainState, setBrainState] = useState(null);
     const scrollRef = useRef(null);
     const socketRef = useRef(null);
+    const prevScanIdRef = useRef(null);
 
     useEffect(() => {
         if (!scanSession?.scan_id) {
-            setLogs([]);
-            setStatus('idle');
             return undefined;
         }
 
-        setLogs([
-            {
-                type: 'thought',
-                phase: 'thought',
-                msg: `Thought: Mission file accepted for ${scanSession.target_url}. Initializing Aether reasoning stack.`,
-            },
-        ]);
-        setBrainState(null);
-        setStatus('connecting');
+        if (prevScanIdRef.current !== scanSession.scan_id) {
+            prevScanIdRef.current = scanSession.scan_id;
+            setLogs([
+                {
+                    type: 'thought',
+                    phase: 'thought',
+                    msg: `Thought: Mission file accepted for ${scanSession.target_url}. Initializing Aether reasoning stack.`,
+                },
+            ]);
+            setBrainState(null);
+            setStatus('connecting');
+        }
 
         socketRef.current = new WebSocket(buildWsUrl(`/ws/scan/${scanSession.scan_id}`));
 

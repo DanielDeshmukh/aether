@@ -115,7 +115,9 @@ const Dashboard = () => {
               return [nextRecord, ...filtered];
             });
           }
-        } catch {}
+        } catch {
+          console.error('Failed to parse WebSocket message');
+        }
       };
       
       ws.onclose = () => {
@@ -172,7 +174,15 @@ const Dashboard = () => {
   const totalPages = Math.max(1, Math.ceil(filteredScans.length / PAGE_SIZE));
   const paginatedScans = filteredScans.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  useEffect(() => { setPage(1); }, [sortBy, filterStatus]);
+  const handleSortChange = (newSortBy) => {
+    setSortBy(newSortBy);
+    setPage(1);
+  };
+
+  const handleFilterChange = (newFilterStatus) => {
+    setFilterStatus(newFilterStatus);
+    setPage(1);
+  };
 
   const handleRetryConnection = () => {
     if (wsRef.current) {
@@ -224,7 +234,7 @@ const Dashboard = () => {
           </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-4 text-[10px] tracking-[0.2em]">
-            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
+            <select value={filterStatus} onChange={(e) => handleFilterChange(e.target.value)}
               className="chamfer-badge border border-white/10 bg-[#0d0d0d] px-4 py-3 text-lambo-ash focus:border-lambo-gold/40 focus:outline-none">
               <option value="all">All Status</option>
               <option value="pending">Pending</option>
@@ -233,7 +243,7 @@ const Dashboard = () => {
               <option value="completed">Completed</option>
               <option value="failed">Failed</option>
             </select>
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+            <select value={sortBy} onChange={(e) => handleSortChange(e.target.value)}
               className="chamfer-badge border border-white/10 bg-[#0d0d0d] px-4 py-3 text-lambo-ash focus:border-lambo-gold/40 focus:outline-none">
               <option value="date">Sort by Date</option>
               <option value="threat">Sort by Threat Level</option>

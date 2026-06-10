@@ -104,7 +104,9 @@ const ScanDetail = () => {
       const response = await apiRequest(`/api/v1/scans/${scanId}`);
       const data = await response.json();
       setScan(data ?? null);
-    } catch {}
+    } catch {
+      console.error('Failed to refetch scan');
+    }
   }, [scanId]);
 
   const handlePause = async () => {
@@ -112,7 +114,9 @@ const ScanDetail = () => {
     try {
       await apiRequest(`/api/v1/scan/${scanId}/pause`, { method: 'POST' });
       await refetchScan();
-    } catch {}
+    } catch {
+      console.error('Failed to pause scan');
+    }
     setLoadingAction('');
   };
 
@@ -121,7 +125,9 @@ const ScanDetail = () => {
     try {
       await apiRequest(`/api/v1/scan/${scanId}/resume`, { method: 'POST' });
       await refetchScan();
-    } catch {}
+    } catch {
+      console.error('Failed to resume scan');
+    }
     setLoadingAction('');
   };
 
@@ -130,7 +136,9 @@ const ScanDetail = () => {
     try {
       await apiRequest(`/api/v1/scan/${scanId}/terminate`, { method: 'POST' });
       await refetchScan();
-    } catch {}
+    } catch {
+      console.error('Failed to terminate scan');
+    }
     setLoadingAction('');
   };
 
@@ -148,7 +156,9 @@ const ScanDetail = () => {
       a.download = `aether-report-${scanId.slice(0, 8)}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch {}
+    } catch {
+      console.error('Failed to download PDF');
+    }
   };
 
   const loadScreenshot = async (vulnId) => {
@@ -163,7 +173,9 @@ const ScanDetail = () => {
         const url = URL.createObjectURL(blob);
         setScreenshots((prev) => ({ ...prev, [vulnId]: url }));
       }
-    } catch {}
+    } catch {
+      console.error('Failed to load screenshot');
+    }
   };
 
   const handleRemediate = async (vulnId) => {
