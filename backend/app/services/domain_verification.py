@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlparse
 
 import httpx
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 try:
     import dns.resolver as dns_resolver

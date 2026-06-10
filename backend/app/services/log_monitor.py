@@ -8,7 +8,7 @@ X-Aether-Safety-Token and RateLimiter behavior during vulnerability scans.
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 

@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 import os
 import time
@@ -708,7 +707,7 @@ class AttackOrchestrator:
                     await self._append_trace(trace, "plan", f"Starting category evaluation for {category}.", category=category)
                     module = modules.get(category)
                     if module is None:
-                        await self._evaluate_placeholder_category(category, trace)
+                        await self._append_trace(trace, "analyze", f"{category}: no dedicated validation module available.", category=category)
                         continue
                     await module(context, target_url, trace)
             except RuntimeError as error:

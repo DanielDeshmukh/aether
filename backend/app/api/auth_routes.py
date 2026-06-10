@@ -1,10 +1,10 @@
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr
 
@@ -73,7 +73,7 @@ def _get_or_create_user(
 
 def _store_magic_link(email: str, user_id: str, token_hash: str) -> None:
     now = datetime.now(timezone.utc)
-    expires_at = now + __import__("datetime").timedelta(minutes=15)
+    expires_at = now + timedelta(minutes=15)
 
     with storage.get_connection() as conn:
         with conn.cursor() as cur:

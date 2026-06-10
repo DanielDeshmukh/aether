@@ -1,8 +1,6 @@
 import os
 import secrets
-import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 import httpx
 import jwt

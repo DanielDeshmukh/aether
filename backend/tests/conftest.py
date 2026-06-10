@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 @pytest.fixture(scope="session")
 def test_db_url():
     """Get test database URL from environment or use a default."""
-    return os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/aether_test")
+    return os.getenv("DATABASE_URL", os.getenv("TEST_DATABASE_URL", "postgresql://aether_test:test_password@localhost:5432/aether_test"))
 
 
 @pytest.fixture(scope="session")

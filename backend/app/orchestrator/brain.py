@@ -8,10 +8,9 @@ import uuid
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, AsyncIterator, Dict, List, Literal, Optional
+from typing import Any, AsyncIterator, Dict, List, Literal
 from urllib.parse import urlparse
 
-import httpx
 from pydantic import BaseModel, Field, ValidationError
 try:
     from playwright.async_api import TimeoutError as PlaywrightTimeoutError

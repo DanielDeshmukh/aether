@@ -4,7 +4,6 @@ import asyncio
 import base64
 from datetime import datetime, timezone
 import io
-import json
 import logging
 import os
 import sys
@@ -13,28 +12,29 @@ from typing import Dict, List
 from urllib.parse import urlparse
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
-
 # Windows-specific fix for Playwright and asyncio subprocess handling
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from starlette.middleware.base import BaseHTTPMiddleware
-from pydantic import BaseModel, Field
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import StreamingResponse  # noqa: E402
+from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
 
-from app.api.auth_routes import router as auth_router
-from app.orchestrator.attack_orchestrator import AttackOrchestrator, GlobalAbort
-from app.orchestrator.brain import BrainBoundaryError, BrainOrchestrator, BrainStatus
-from app.services.domain_verification import DomainVerificationManager
-from app.services.git_integration_service import GitIntegrationService
-from app.services.report_generator import render_pdf_report
-from app.services.storage import ScanStorage
-from app.api.deps import get_current_user, check_scan_quota
-from app.api.shield import AetherShieldMiddleware
-from app.tools.validators import is_safe_url
+from app.api.auth_routes import router as auth_router  # noqa: E402
+from app.api.utils import standard_response  # noqa: E402
+from app.orchestrator.attack_orchestrator import AttackOrchestrator, GlobalAbort  # noqa: E402
+from app.orchestrator.brain import BrainBoundaryError, BrainOrchestrator, BrainStatus  # noqa: E402
+from app.services.domain_verification import DomainVerificationManager  # noqa: E402
+from app.services.git_integration_service import GitIntegrationService  # noqa: E402
+from app.services.report_generator import render_pdf_report  # noqa: E402
+from app.services.storage import ScanStorage  # noqa: E402
+from app.api.deps import get_current_user, check_scan_quota  # noqa: E402
+from app.api.shield import AetherShieldMiddleware  # noqa: E402
+from app.tools.validators import is_safe_url  # noqa: E402
+
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 logger = logging.getLogger("aether.api")
 
@@ -247,9 +247,6 @@ async def safe_send_json(websocket: WebSocket, payload: dict) -> None:
     if websocket.client_state.name != "CONNECTED":
         return
     await websocket.send_json(payload)
-
-
-from app.api.utils import standard_response
 
 
 async def enforce_target_verification(
