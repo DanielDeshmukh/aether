@@ -1,6 +1,6 @@
 # AETHER — Complete Task Checklist
 > A comprehensive list of every pending item to bring AETHER from current state to 100% production-ready.
-> Current estimated completion: **~57%** (73 of 128 items done)
+> Current estimated completion: **~60%** (77 of 128 items done)
 > Last audited: 2026-06-10
 
 ---
@@ -495,16 +495,16 @@
 
 > Dead code and inconsistencies to clean up.
 
-- [ ] **Remove `_hash_token()` / `_verify_token()` dead code** from `auth.py:65-73` or wire into magic link flow.
+- [x] **Remove `_hash_token()` / `_verify_token()` dead code** from `auth.py:65-73` or wire into magic link flow.
   - File: `backend/app/services/auth.py:65-73`
 
-- [ ] **Remove `_scan_query()` dead code** from `storage.py:152` (raises `NotImplementedError`).
+- [x] **Remove `_scan_query()` dead code** from `storage.py:152` (raises `NotImplementedError`).
   - File: `backend/app/services/storage.py:152`
 
-- [ ] **Remove `upsert_scan()` dead code** from `storage.py:1272` (raises `NotImplementedError`).
+- [x] **Remove `upsert_scan()` dead code** from `storage.py:1272` (raises `NotImplementedError`).
   - File: `backend/app/services/storage.py:1272`
 
-- [ ] **Remove `replace_hunt_findings()` dead code** from `storage.py:1328` (raises `NotImplementedError`).
+- [x] **Remove `replace_hunt_findings()` dead code** from `storage.py:1328` (raises `NotImplementedError`).
   - File: `backend/app/services/storage.py:1328`
 
 - [ ] **Standardize API response format** — Some endpoints return `{ "data": ... }`, others return raw objects. Pick one format and apply consistently.
@@ -670,11 +670,11 @@
 | P2 — Infrastructure | 10 | 10 | 0 |
 | P2 — Domain Verification | 3 | 3 | 0 |
 | P3 — Test Suite | 30 | 0 | 30 |
-| P3 — Code Cleanup | 8 | 0 | 8 |
+| P3 — Code Cleanup | 8 | 4 | 4 |
 | P3 — Documentation | 5 | 0 | 5 |
 | P3 — Mobile Audit | 7 | 0 | 7 |
 | P3 — CI/CD | 5 | 0 | 5 |
-| **TOTAL** | **128** | **73** | **55** |
+| **TOTAL** | **128** | **77** | **51** |
 
-> **Current completion: ~57%** (73 of 128 items done - past halfway mark!)
+> **Current completion: ~60%** (77 of 128 items done - past halfway mark!)
 > **Estimated effort: < 1 week for a single developer**

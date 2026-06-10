@@ -180,9 +180,6 @@ class ScanStorage:
         except (TypeError, ValueError):
             return None
 
-    def _scan_query(self, user_id: str, select_clause: str = "*") -> Any:
-        raise NotImplementedError("Legacy query path has been disabled.")
-
     def _fetch_owned_scan(self, scan_id: str, user_id: str, select_clause: str = "*") -> Dict[str, Any] | None:
         resolved_scan_id = uuid.UUID(self.resolve_record_identifier(scan_id))
         with self.get_connection() as connection:
@@ -1329,19 +1326,6 @@ class ScanStorage:
             ip_address=scan_data.get("ip_address"),
         )
 
-    def upsert_scan(
-        self,
-        scan_id: str,
-        target_url: str,
-        initial_plan: Dict[str, Any],
-        brain_status: str,
-        user_id: str,
-        results: Dict[str, Any] | None = None,
-        final_report: Dict[str, Any] | None = None,
-        remediations: Dict[str, Any] | None = None,
-    ) -> bool:
-        raise NotImplementedError("Legacy upsert_scan path has been disabled. Use persist_full_pipeline().")
-
     def get_total_scan_count(self, user_id: str) -> int:
         try:
             with self.get_connection() as connection:
@@ -1387,16 +1371,6 @@ class ScanStorage:
                         update_columns=["user_id", "target_url", "confirmed_at", "ip_address"],
                     )
         return inserted == 1
-
-    def replace_hunt_findings(
-        self,
-        scan_id: str,
-        user_id: str,
-        vulnerabilities: list[Dict[str, Any]],
-        profiles: list[Dict[str, Any]],
-        session_id: str
-    ) -> bool:
-        raise NotImplementedError("Legacy replace_hunt_findings path has been disabled. Use persist_full_pipeline().")
 
     def save_remediations(self, scan_id: str, user_id: str, remediations: Dict[str, Any]) -> bool:
         with self.get_connection() as connection:
