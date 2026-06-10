@@ -1,7 +1,8 @@
 import asyncio
 import json
 import logging
-from typing import Any
+import time
+from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlparse
 
 import httpx
@@ -14,6 +15,96 @@ except ImportError:  # pragma: no cover - resolved when requirements are install
 
 
 logger = logging.getLogger("aether.domain_verification")
+
+# Cache TTL: 24 hours in seconds
+VERIFICATION_CACHE_TTL = 24 * 60 * 60
+
+
+class VerificationCache:
+    """In-memory cache for domain verification results with TTL."""
+    
+    def __init__(self, ttl_seconds: int = VERIFICATION_CACHE_TTL) -> None:
+        self._cache: Dict[str, Tuple[DomainVerificationResult, float]] = {}
+        self._ttl = ttl_seconds
+    
+    def get(self, domain: str) -> Optional[DomainVerificationResult]:
+        """Get cached verification result if still valid."""
+        if domain in self._cache:
+            result, timestamp = self._cache[domain]
+            if time.time() - timestamp < self._ttl:
+                logger.debug("Cache hit for domain: %s", domain)
+                return result
+            else:
+                # Cache expired
+                del self._cache[domain]
+                logger.debug("Cache expired for domain: %s", domain)
+        return None
+    
+    def set(self, domain: str, result: DomainVerificationResult) -> None:
+        """Cache a verification result."""
+        self._cache[domain] = (result, time.time())
+        logger.debug("Cached verification result for domain: %s", domain)
+    
+    def invalidate(self, domain: str) -> None:
+        """Remove a domain from cache."""
+        if domain in self._cache:
+            del self._cache[domain]
+            logger.debug("Invalidated cache for domain: %s", domain)
+    
+    def clear(self) -> None:
+        """Clear all cached results."""
+        self._cache.clear()
+        logger.debug("Cleared verification cache")
+
+
+class VerificationRateLimiter:
+    """Rate limiter for verification attempts per domain."""
+    
+    def __init__(self, max_attempts: int = 10, window_seconds: int = 3600) -> None:
+        """
+        Args:
+            max_attempts: Maximum verification attempts per domain within the window.
+            window_seconds: Time window in seconds (default: 1 hour).
+        """
+        self._attempts: Dict[str, list[float]] = {}
+        self._max_attempts = max_attempts
+        self._window_seconds = window_seconds
+    
+    def _evict_old_entries(self, domain: str) -> None:
+        """Remove entries outside the time window."""
+        if domain not in self._attempts:
+            return
+        now = time.time()
+        cutoff = now - self._window_seconds
+        self._attempts[domain] = [t for t in self._attempts[domain] if t > cutoff]
+        if not self._attempts[domain]:
+            del self._attempts[domain]
+    
+    def check_and_record(self, domain: str) -> bool:
+        """
+        Check if verification is allowed and record the attempt.
+        
+        Returns:
+            True if verification is allowed, False if rate limit exceeded.
+        """
+        self._evict_old_entries(domain)
+        
+        if domain not in self._attempts:
+            self._attempts[domain] = []
+        
+        if len(self._attempts[domain]) >= self._max_attempts:
+            logger.warning("Rate limit exceeded for domain: %s", domain)
+            return False
+        
+        self._attempts[domain].append(time.time())
+        return True
+    
+    def get_remaining_attempts(self, domain: str) -> int:
+        """Get remaining verification attempts for a domain."""
+        self._evict_old_entries(domain)
+        if domain not in self._attempts:
+            return self._max_attempts
+        return max(0, self._max_attempts - len(self._attempts[domain]))
 
 
 class VerificationMethodResult(BaseModel):
@@ -37,6 +128,8 @@ class DomainVerificationResult(BaseModel):
 class DomainVerificationManager:
     def __init__(self, storage: Any) -> None:
         self.storage = storage
+        self._cache = VerificationCache()
+        self._rate_limiter = VerificationRateLimiter()
 
     def _extract_domain(self, target_url: str) -> str:
         parsed = urlparse(target_url if "://" in target_url else f"https://{target_url}")
@@ -169,6 +262,26 @@ class DomainVerificationManager:
                 failure_message="DOMAIN VERIFICATION FAILED: target hostname could not be resolved from the scan request.",
             )
 
+        # Check cache first
+        cached_result = self._cache.get(domain)
+        if cached_result:
+            logger.info("Using cached verification result for domain: %s", domain)
+            return cached_result
+
+        # Check rate limit
+        if not self._rate_limiter.check_and_record(domain):
+            remaining = self._rate_limiter.get_remaining_attempts(domain)
+            return DomainVerificationResult(
+                domain=domain,
+                allowed=False,
+                record_found=True,
+                failure_message=(
+                    f"DOMAIN VERIFICATION FAILED: rate limit exceeded for `{domain}`. "
+                    f"Maximum {self._rate_limiter._max_attempts} verification attempts per hour. "
+                    f"Remaining attempts: {remaining}."
+                ),
+            )
+
         record = self.storage.fetch_target_verification_record(domain, user_id=user_id)
         if not record:
             return DomainVerificationResult(
@@ -183,12 +296,14 @@ class DomainVerificationManager:
 
         is_verified = bool(record.get("is_verified"))
         if is_verified:
-            return DomainVerificationResult(
+            result = DomainVerificationResult(
                 domain=domain,
                 allowed=True,
                 is_verified=True,
                 record_found=True,
             )
+            self._cache.set(domain, result)
+            return result
 
         expected_token = str(record.get("verification_token") or record.get("http_token") or "").strip()
         if not expected_token:
@@ -208,7 +323,7 @@ class DomainVerificationManager:
 
         if dns_result.success and http_result.success:
             await asyncio.to_thread(self.storage.mark_target_verified, domain)
-            return DomainVerificationResult(
+            result = DomainVerificationResult(
                 domain=domain,
                 allowed=True,
                 is_verified=True,
@@ -216,6 +331,8 @@ class DomainVerificationManager:
                 dns=dns_result,
                 http=http_result,
             )
+            self._cache.set(domain, result)
+            return result
         else:
             missing_requirements: list[str] = []
             if not dns_result.success:
@@ -238,3 +355,21 @@ class DomainVerificationManager:
             dns=dns_result,
             http=http_result,
         )
+
+    def invalidate_cache(self, domain: str) -> None:
+        """Invalidate cached verification result for a domain."""
+        self._cache.invalidate(domain)
+    
+    def clear_cache(self) -> None:
+        """Clear all cached verification results."""
+        self._cache.clear()
+    
+    def get_rate_limit_status(self, domain: str) -> Dict[str, Any]:
+        """Get rate limit status for a domain."""
+        remaining = self._rate_limiter.get_remaining_attempts(domain)
+        return {
+            "domain": domain,
+            "max_attempts": self._rate_limiter._max_attempts,
+            "remaining_attempts": remaining,
+            "window_seconds": self._rate_limiter._window_seconds,
+        }

@@ -224,9 +224,20 @@ const Dashboard = () => {
                         <p className="text-[10px] font-bold tracking-[0.35em] text-lambo-gold">// Scan {(scan.id ?? 'unknown').slice(0, 8)}</p>
                         <p className="mt-4 break-all text-lg font-bold uppercase leading-tight tracking-[-0.05em] text-lambo-white">{scan.target_url ?? 'Target unavailable'}</p>
                       </div>
-                      <span className={`chamfer-badge border px-3 py-2 text-[10px] font-bold tracking-[0.28em] ${statusClasses}`}>
-                        {statusLabelMap[normalizedStatus]}
-                      </span>
+                      <div className="flex flex-col items-end gap-2">
+                        <span className={`chamfer-badge border px-3 py-2 text-[10px] font-bold tracking-[0.28em] ${statusClasses}`}>
+                          {statusLabelMap[normalizedStatus]}
+                        </span>
+                        {scan.is_verified ? (
+                          <span className="chamfer-badge border border-green-500/30 bg-green-500/10 px-2 py-1 text-[9px] font-bold tracking-[0.2em] text-green-400">
+                            Verified
+                          </span>
+                        ) : (
+                          <span className="chamfer-badge border border-yellow-500/30 bg-yellow-500/10 px-2 py-1 text-[9px] font-bold tracking-[0.2em] text-yellow-400">
+                            Unverified
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="mt-4 flex items-center gap-4 text-[10px] tracking-[0.22em] text-lambo-ash">

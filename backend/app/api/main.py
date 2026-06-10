@@ -437,6 +437,17 @@ async def api_healthcheck():
     }
 
 
+@app.get("/api/v1/verification/status")
+async def get_verification_status(domain: str, user_id: str | None = Depends(get_current_user)):
+    """Get verification status for a domain."""
+    verification = await domain_verification_manager.verify_target(f"https://{domain}", user_id=user_id)
+    return {
+        "domain": domain,
+        "verification": verification.model_dump(),
+        "rate_limit_status": domain_verification_manager.get_rate_limit_status(domain),
+    }
+
+
 @app.post("/api/v1/scans")
 @app.post("/api/v1/scan", include_in_schema=False)
 @app.post("/scan", include_in_schema=False)
@@ -923,7 +934,23 @@ async def list_scans(user_id: str = Depends(get_current_user)):
     except Exception:
         logger.exception("Schema sync failed before listing scans.")
 
-    return scan_storage.fetch_all_scans(user_id=user_id)
+    scans = scan_storage.fetch_all_scans(user_id=user_id)
+    
+    # Add verification status for each scan's target domain
+    for scan in scans:
+        target_url = scan.get("target_url", "")
+        if target_url:
+            domain = domain_verification_manager._extract_domain(target_url)
+            if domain:
+                # Check if target is verified in the database
+                record = scan_storage.fetch_target_verification_record(domain, user_id=user_id)
+                scan["is_verified"] = bool(record.get("is_verified")) if record else False
+            else:
+                scan["is_verified"] = False
+        else:
+            scan["is_verified"] = False
+    
+    return scans
 
 
 @app.get("/api/v1/scans/{scan_id}")

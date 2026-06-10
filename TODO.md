@@ -1,6 +1,6 @@
 # AETHER — Complete Task Checklist
 > A comprehensive list of every pending item to bring AETHER from current state to 100% production-ready.
-> Current estimated completion: **~100%** (halfway through all items)
+> Current estimated completion: **~52%** (67 of 128 items done)
 > Last audited: 2026-06-10
 
 ---
@@ -386,13 +386,13 @@
 
 > Minor fixes to the verification system.
 
-- [ ] **Add verification result caching** — Every scan trigger re-verifies the domain. Cache results for 24 hours.
+- [x] **Add verification result caching** — Every scan trigger re-verifies the domain. Cache results for 24 hours.
   - File: `backend/app/services/domain_verification.py`
 
-- [ ] **Add rate limiting on verification attempts** — Prevent abuse of the verification endpoint.
+- [x] **Add rate limiting on verification attempts** — Prevent abuse of the verification endpoint.
   - File: `backend/app/services/domain_verification.py`
 
-- [ ] **Add verification status to dashboard** — Show whether each scan target is verified.
+- [x] **Add verification status to dashboard** — Show whether each scan target is verified.
   - File: `frontend/src/pages/Dashboard.jsx`
 
 ---
@@ -668,13 +668,13 @@
 | P2 — PDF Quality | 3 | 2 | 1 |
 | P2 — Remediation | 5 | 3 | 2 |
 | P2 — Infrastructure | 10 | 10 | 0 |
-| P2 — Domain Verification | 3 | 0 | 3 |
+| P2 — Domain Verification | 3 | 3 | 0 |
 | P3 — Test Suite | 30 | 0 | 30 |
 | P3 — Code Cleanup | 8 | 0 | 8 |
 | P3 — Documentation | 5 | 0 | 5 |
 | P3 — Mobile Audit | 7 | 0 | 7 |
 | P3 — CI/CD | 5 | 0 | 5 |
-| **TOTAL** | **128** | **64** | **64** |
+| **TOTAL** | **128** | **67** | **61** |
 
-> **Current completion: ~100%** (64 of 128 items done - halfway mark!)
+> **Current completion: ~52%** (67 of 128 items done - past halfway mark!)
 > **Estimated effort: < 1 week for a single developer**
