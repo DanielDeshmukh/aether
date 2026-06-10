@@ -1,6 +1,6 @@
 # AETHER — Complete Task Checklist
 > A comprehensive list of every pending item to bring AETHER from current state to 100% production-ready.
-> Current estimated completion: **~95%** (121 of 128 items done)
+> Current estimated completion: **~98%** (126 of 128 items done)
 > Last audited: 2026-06-10
 
 ---
@@ -577,35 +577,35 @@
 
 > Production deployment readiness.
 
-- [ ] **Add GitHub Actions CI workflow**
-  - [ ] Run `pytest` with coverage on every PR
-  - [ ] Run `npm run build` on frontend to verify no build errors
-  - [ ] Run linting (ruff for Python, eslint for JS)
-  - [ ] Run type checking (mypy for Python)
+- [x] **Add GitHub Actions CI workflow**
+  - [x] Run `pytest` with coverage on every PR
+  - [x] Run `npm run build` on frontend to verify no build errors
+  - [x] Run linting (ruff for Python, eslint for JS)
+  - [x] Run type checking (mypy for Python)
   - File: Create `.github/workflows/ci.yml`
 
-- [ ] **Add Docker build optimization**
-  - [ ] Multi-stage Dockerfile for backend (build stage + runtime stage)
-  - [ ] Multi-stage Dockerfile for frontend (build stage + nginx stage)
-  - [ ] Docker Compose for local development with PostgreSQL
+- [x] **Add Docker build optimization**
+  - [x] Multi-stage Dockerfile for backend (build stage + runtime stage)
+  - [x] Multi-stage Dockerfile for frontend (build stage + nginx stage)
+  - [x] Docker Compose for local development with PostgreSQL
   - File: `Dockerfile`, `docker-compose.yml`
 
-- [ ] **Add production deployment configuration**
-  - [ ] Gunicorn + Uvicorn worker config for production
-  - [ ] Nginx reverse proxy config
-  - [ ] SSL/TLS certificate setup
-  - [ ] Database connection pooling tuning
+- [x] **Add production deployment configuration**
+  - [x] Gunicorn + Uvicorn worker config for production
+  - [x] Nginx reverse proxy config
+  - [x] SSL/TLS certificate setup
+  - [x] Database connection pooling tuning
   - File: Create `deploy/` directory
 
-- [ ] **Add environment-specific configs**
-  - [ ] Development settings
-  - [ ] Staging settings
-  - [ ] Production settings
+- [x] **Add environment-specific configs**
+  - [x] Development settings
+  - [x] Staging settings
+  - [x] Production settings
   - File: Create `backend/app/config.py` with environment-aware loading
 
-- [ ] **Add database backup strategy**
-  - [ ] Automated daily PostgreSQL backups
-  - [ ] Backup retention policy
+- [x] **Add database backup strategy**
+  - [x] Automated daily PostgreSQL backups
+  - [x] Backup retention policy
   - File: Create `scripts/backup.sh`
 
 ---
@@ -673,8 +673,8 @@
 | P3 — Code Cleanup | 8 | 6 | 2 |
 | P3 — Documentation | 5 | 5 | 0 |
 | P3 — Mobile Audit | 7 | 7 | 0 |
-| P3 — CI/CD | 5 | 0 | 5 |
-| **TOTAL** | **128** | **121** | **7** |
+| P3 — CI/CD | 5 | 5 | 0 |
+| **TOTAL** | **128** | **126** | **2** |
 
-> **Current completion: ~95%** (121 of 128 items done - nearly complete!)
-> **Estimated effort: < 1 day for a single developer**
+> **Current completion: ~98%** (126 of 128 items done - almost complete!)
+> **Estimated effort: < 1 hour for a single developer**

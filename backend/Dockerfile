@@ -1,7 +1,5 @@
-FROM python:3.12-slim
-
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+# Build stage
+FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
@@ -11,12 +9,23 @@ RUN apt-get update \
 
 COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+    && pip install --no-cache-dir --prefix=/install -r requirements.txt
 
+# Runtime stage
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Copy installed packages from builder
+COPY --from=builder /install /usr/local
+
+# Copy application code
 COPY backend/app ./app
 COPY backend/main.py ./main.py
 COPY backend/start.sh ./start.sh
-COPY backend/tests ./tests
 COPY backend/.env.example ./.env.example
 
 RUN chmod +x /app/start.sh
