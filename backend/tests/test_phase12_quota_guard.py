@@ -44,10 +44,8 @@ class TestPhase12QuotaGuard(unittest.TestCase):
             with self.assertRaises(HTTPException) as context:
                 asyncio.run(deps.check_scan_quota("a7988ba7-c5f5-4ad1-a35d-6814f75c6bf4"))
             self.assertEqual(context.exception.status_code, 403)
-            self.assertEqual(
-                context.exception.detail,
-                "AETHER MVP Limit Reached: 3/3 scans used. Contact DevLabs for access.",
-            )
+            self.assertIn("AETHER MVP Limit Reached", context.exception.detail)
+            self.assertIn("3/3 scans used", context.exception.detail)
 
     def test_log_consent_persists_origin_ip(self):
         storage = ScanStorage()

@@ -84,6 +84,38 @@ class ScanStorage:
             self._pool.close()
             self._pool = None
 
+    def get_pool_stats(self) -> dict:
+        """Return connection pool statistics."""
+        if self._pool is None:
+            return {"configured": False}
+        try:
+            stats = self._pool.get_stats()
+            return {
+                "configured": True,
+                "min_size": self._pool.min_size,
+                "max_size": self._pool.max_size,
+                "active": stats.get("active", 0),
+                "idle": stats.get("idle", 0),
+                "waiting": stats.get("waiting", 0),
+            }
+        except Exception:
+            return {"configured": True, "error": "stats_unavailable"}
+
+    def check_database_health(self) -> dict:
+        """Verify database connectivity."""
+        if not self.database_configured():
+            return {"configured": False, "healthy": False, "error": "DATABASE_URL not set"}
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT 1")
+                    result = cursor.fetchone()
+                    if result:
+                        return {"configured": True, "healthy": True}
+            return {"configured": True, "healthy": False, "error": "query_failed"}
+        except Exception as e:
+            return {"configured": True, "healthy": False, "error": str(e)}
+
     @contextmanager
     def get_connection(self) -> Iterator[psycopg.Connection]:
         pool = self._get_pool()

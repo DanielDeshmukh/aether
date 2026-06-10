@@ -8,10 +8,12 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from app.services.storage import ScanStorage
+from app.services.quota_manager import QuotaManager
 
 security = HTTPBearer()
 logger = logging.getLogger("AETHER_BACKEND")
 scan_storage = ScanStorage()
+quota_manager = QuotaManager(scan_storage)
 
 
 async def get_current_user(
@@ -84,10 +86,10 @@ async def get_verified_user_id(
 async def check_scan_quota(
     user_id: Annotated[str, Depends(get_current_user)],
 ) -> str:
-    total_scans = scan_storage.get_total_scan_count(user_id)
-    if total_scans >= 3:
+    quota_status = quota_manager.check_quota(user_id)
+    if not quota_status["allowed"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="AETHER MVP Limit Reached: 3/3 scans used. Contact DevLabs for access.",
+            detail=f"AETHER MVP Limit Reached: {quota_status['used']}/{quota_status['limit']} scans used. Contact DevLabs for access.",
         )
     return user_id
