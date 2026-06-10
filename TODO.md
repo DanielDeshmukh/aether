@@ -39,6 +39,7 @@ AETHER is now fully production-ready with:
 - [P3 — Documentation & Config](#p3--documentation--config)
 - [P3 — Mobile Responsive Audit](#p3--mobile-responsive-audit)
 - [P3 — CI/CD & Deployment](#p3--cicd--deployment)
+- [P3 — CLI Tool](#p3--cli-tool)
 - [Verification Checklist](#verification-checklist)
 
 ---
@@ -624,6 +625,33 @@ AETHER is now fully production-ready with:
   - [x] Automated daily PostgreSQL backups
   - [x] Backup retention policy
   - File: Create `scripts/backup.sh`
+
+---
+
+## P3 — CLI Tool
+
+> Unified command-line interface for managing AETHER services.
+
+- [x] **Create CLI module** — `aether` command with subcommands for all operations
+  - [x] `aether run` — Start all services (backend + frontend) with graceful Ctrl+C handling
+  - [x] `aether dev` — Start in development mode with hot reload
+  - [x] `aether build` — Build frontend for production
+  - [x] `aether test` — Run backend test suite with coverage
+  - [x] `aether db migrate/downgrade/reset/status/history` — Database management
+  - [x] `aether status` — Check health of all services
+  - [x] `aether logs` — View service logs
+  - [x] `aether clean` — Clean build artifacts
+  - [x] `aether info` — Show project info and environment status
+  - File: Create `backend/app/cli.py`
+
+- [x] **Add module execution support** — Allow `python -m app` to run CLI
+  - File: Create `backend/app/__main__.py`
+
+- [x] **Add click dependency** — Required for CLI framework
+  - File: Update `backend/requirements.txt`
+
+- [x] **Add console_scripts entry point** — Install `aether` command with `pip install -e .`
+  - File: Update `backend/pyproject.toml`
 
 ---
 

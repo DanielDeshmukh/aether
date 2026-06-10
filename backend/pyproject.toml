@@ -1,3 +1,18 @@
+[project]
+name = "aether"
+version = "1.0.0"
+description = "AETHER Security Intelligence Platform"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.136.0",
+    "uvicorn[standard]>=0.45.0",
+    "click>=8.1.0",
+    "python-dotenv>=1.2.2",
+]
+
+[project.scripts]
+aether = "app.cli:main"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
