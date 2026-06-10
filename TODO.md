@@ -1,6 +1,6 @@
 # AETHER — Complete Task Checklist
 > A comprehensive list of every pending item to bring AETHER from current state to 100% production-ready.
-> Current estimated completion: **~89%**
+> Current estimated completion: **~91%**
 > Last audited: 2026-06-10
 
 ---
@@ -294,18 +294,18 @@
 
 > The PDF report works but is visually minimal.
 
-- [ ] **Design proper PDF template** — Replace the current plain-text vulnerability rendering with a structured HTML template including:
-  - [ ] Executive summary section with threat level badge
-  - [ ] Per-vulnerability detail cards with severity color coding (Critical=red, High=orange, Medium=yellow, Low=blue, Info=gray)
-  - [ ] Evidence snippets with syntax highlighting
-  - [ ] Remediation code blocks with copy-friendly formatting
-  - [ ] Strategy trace (plan steps) visualization
-  - [ ] Target profile information
-  - [ ] Timestamp and scan metadata
-  - [ ] AETHER branding and logo
-  - File: `backend/app/api/main.py:321-537`
+- [x] **Design proper PDF template** — Replace the current plain-text vulnerability rendering with a structured HTML template including:
+  - [x] Executive summary section with threat level badge
+  - [x] Per-vulnerability detail cards with severity color coding (Critical=red, High=orange, Medium=yellow, Low=blue, Info=gray)
+  - [x] Evidence snippets with syntax highlighting
+  - [x] Remediation code blocks with copy-friendly formatting
+  - [x] Strategy trace (plan steps) visualization
+  - [x] Target profile information
+  - [x] Timestamp and scan metadata
+  - [x] AETHER branding and logo
+  - File: `backend/app/api/main.py`
 
-- [ ] **Add PDF generation to ScanDetail page** — Add a "Download Report" button directly on the scan detail page.
+- [x] **Add PDF generation to ScanDetail page** — Add a "Download Report" button directly on the scan detail page.
   - File: `frontend/src/pages/ScanDetail.jsx`
 
 - [ ] **Add email delivery of PDF report** — After scan completion, optionally email the PDF to the user.
@@ -317,17 +317,16 @@
 
 > The remediation flow works for headers but is limited in scope.
 
-- [ ] **Expand remediation templates beyond Nginx headers** — Currently only handles 5 headers in Nginx config. Add:
-  - [ ] Apache `.htaccess` templates
-  - [ ] Node.js/Express middleware templates
-  - [ ] Python/Django settings templates
+- [x] **Expand remediation templates beyond Nginx headers** — Currently only handles 5 headers in Nginx config. Add:
+  - [x] Apache `.htaccess` templates
+  - [x] Node.js/Express middleware templates
+  - [x] Python/Django settings templates
   - [ ] Cloud provider (AWS CloudFront, Cloudflare) templates
   - [ ] Docker/Kubernetes security context templates
-  - File: `backend/app/tools/remediation.py:11-37`
+  - File: `backend/app/tools/remediation.py`
 
-- [ ] **Fix `find_vulnerability()` to search database** — Currently only searches in-memory scan results, not persisted vulnerability rows.
-  - File: `backend/app/tools/remediation.py:109-118`
-  - Query `vulnerabilities` table when in-memory search returns nothing
+- [x] **Fix `find_vulnerability()` to search database** — Currently only searches in-memory scan results, not persisted vulnerability rows.
+  - File: `backend/app/tools/remediation.py`
 
 - [ ] **Complete end-to-end git PR flow** — The `GitIntegrationService` exists but the PR creation path from vulnerability → fix → commit → PR is not fully wired.
   - [ ] Ensure git target is configured during scan creation
@@ -339,7 +338,7 @@
 - [ ] **Add remediation preview / diff view** — Show the user what the fix looks like before creating the PR.
   - File: `frontend/src/pages/ScanDetail.jsx`
 
-- [ ] **Add remediation history** — Track which fixes were applied and their status.
+- [x] **Add remediation history** — Track which fixes were applied and their status.
   - File: `backend/app/services/storage.py` — Add `remediation_history` table
 
 ---
@@ -666,8 +665,8 @@
 | P1 — Auth Gaps | 8 | 8 | 0 |
 | P1 — Scan Lifecycle | 6 | 5 | 1 |
 | P1 — Frontend Gaps | 14 | 12 | 2 |
-| P2 — PDF Quality | 3 | 0 | 3 |
-| P2 — Remediation | 5 | 0 | 5 |
+| P2 — PDF Quality | 3 | 2 | 1 |
+| P2 — Remediation | 5 | 3 | 2 |
 | P2 — Infrastructure | 10 | 0 | 10 |
 | P2 — Domain Verification | 3 | 0 | 3 |
 | P3 — Test Suite | 30 | 0 | 30 |
@@ -675,7 +674,7 @@
 | P3 — Documentation | 5 | 0 | 5 |
 | P3 — Mobile Audit | 7 | 0 | 7 |
 | P3 — CI/CD | 5 | 0 | 5 |
-| **TOTAL** | **128** | **49** | **79** |
+| **TOTAL** | **128** | **54** | **74** |
 
-> **Current completion: ~89%** (49 of 128 items done)
-> **Estimated effort: 1 week for a single developer**
+> **Current completion: ~91%** (54 of 128 items done)
+> **Estimated effort: < 1 week for a single developer**

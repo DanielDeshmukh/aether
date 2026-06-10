@@ -427,6 +427,48 @@ async def render_pdf_report(scan: dict, vulnerabilities: list[dict], profiles: l
     final_report = scan.get("final_report") or {}
     diagnosis_content = final_report.get("synthesis") or final_report.get("report") or "No diagnosis available."
 
+    # Executive summary
+    threat_level = (final_report.get("threat_level") or scan.get("threat_level") or "unknown").upper()
+    threat_color = severity_colors.get(threat_level, "#6b7280")
+    vuln_count = len(vulnerabilities)
+    severity_counts = {}
+    for v in vulnerabilities:
+        sev = (v.get("severity") or "unknown").upper()
+        severity_counts[sev] = severity_counts.get(sev, 0) + 1
+    summary_bars = ""
+    for sev in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]:
+        count = severity_counts.get(sev, 0)
+        if count > 0:
+            c = severity_colors.get(sev, "#6b7280")
+            summary_bars += f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="background:{c};color:#000;padding:2px 8px;font-size:10px;font-weight:700;min-width:60px;text-align:center;">{sev}</span><span style="color:#ccc;font-size:12px;">{count} finding{"s" if count != 1 else ""}</span></div>'
+
+    # Strategy trace
+    initial_plan = scan.get("initial_plan") or {}
+    plan_steps = initial_plan.get("steps", []) if isinstance(initial_plan, dict) else (initial_plan if isinstance(initial_plan, list) else [])
+    trace_html = ""
+    for i, step in enumerate(plan_steps[:10]):
+        label = step.get("label", f"Step {i+1}") if isinstance(step, dict) else f"Step {i+1}"
+        message = step.get("message", "") if isinstance(step, dict) else str(step)
+        trace_html += f'<div style="border-left:2px solid #d4af37;padding:8px 12px;margin-bottom:8px;background:#111;"><span style="color:#d4af37;font-size:11px;font-weight:700;">{label}</span><p style="color:#aaa;font-size:11px;margin-top:4px;">{message[:200]}</p></div>'
+    if not trace_html:
+        trace_html = '<p style="color:#666;font-size:12px;">No strategy trace available.</p>'
+
+    # Scan metadata
+    created_at = scan.get("created_at")
+    completed_at = scan.get("completed_at")
+    scan_status = (scan.get("status") or "unknown").upper()
+    meta_items = [
+        f"<strong>Scan ID:</strong> {str(scan.get('id', ''))[:8]}",
+        f"<strong>Status:</strong> {scan_status}",
+        f"<strong>Threat Level:</strong> <span style='color:{threat_color}'>{threat_level}</span>",
+        f"<strong>Total Findings:</strong> {vuln_count}",
+    ]
+    if created_at:
+        meta_items.append(f"<strong>Started:</strong> {created_at.strftime('%Y-%m-%d %H:%M UTC') if hasattr(created_at, 'strftime') else str(created_at)}")
+    if completed_at:
+        meta_items.append(f"<strong>Completed:</strong> {completed_at.strftime('%Y-%m-%d %H:%M UTC') if hasattr(completed_at, 'strftime') else str(completed_at)}")
+    meta_content = "<br/>".join(meta_items)
+
     html_template = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -574,6 +616,24 @@ async def render_pdf_report(scan: dict, vulnerabilities: list[dict], profiles: l
     </div>
 
     <div class="section">
+        <span class="section-title">Executive Summary</span>
+        <div class="content-card">
+            <div style="display:flex;align-items:center;gap:15px;margin-bottom:20px;">
+                <span style="background:{threat_color};color:#000;padding:6px 16px;font-size:13px;font-weight:900;text-transform:uppercase;">Threat Level: {threat_level}</span>
+                <span style="color:#888;font-size:12px;">{vuln_count} total finding{"s" if vuln_count != 1 else ""}</span>
+            </div>
+            {summary_bars}
+        </div>
+    </div>
+
+    <div class="section">
+        <span class="section-title">Scan Metadata</span>
+        <div class="content-card">
+            <p class="item-text">{meta_content}</p>
+        </div>
+    </div>
+
+    <div class="section">
         <span class="section-title">Surface Vulnerabilities</span>
         {vulnerabilities_content}
     </div>
@@ -590,6 +650,11 @@ async def render_pdf_report(scan: dict, vulnerabilities: list[dict], profiles: l
         <div class="content-card">
             <p class="item-text">{diagnosis_content}</p>
         </div>
+    </div>
+
+    <div class="section">
+        <span class="section-title">Strategy Trace</span>
+        {trace_html}
     </div>
 
     <div class="footer">
@@ -1109,6 +1174,13 @@ async def export_scan(scan_id: str, format: str = "json", user_id: str = Depends
         )
 
     return export_data
+
+
+@app.get("/api/v1/scans/{scan_id}/remediation-history")
+async def get_remediation_history(scan_id: str, user_id: str = Depends(get_current_user)):
+    scan_storage.ensure_schema()
+    history = scan_storage.fetch_remediation_history(scan_id, user_id)
+    return {"history": history}
 
 
 @app.get("/api/v1/scans")

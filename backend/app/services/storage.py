@@ -649,6 +649,24 @@ class ScanStorage:
                     create index if not exists revoked_tokens_user_idx on public.revoked_tokens (user_id);
                     """
                 )
+                cursor.execute(
+                    """
+                    create table if not exists public.remediation_history (
+                        id uuid primary key default gen_random_uuid(),
+                        scan_id uuid references public.scans(id) on delete cascade,
+                        user_id uuid,
+                        vuln_id text,
+                        action text not null,
+                        language text,
+                        created_at timestamptz not null default timezone('utc', now())
+                    );
+                    """
+                )
+                cursor.execute(
+                    """
+                    create index if not exists remediation_history_scan_idx on public.remediation_history (scan_id);
+                    """
+                )
             connection.commit()
             self._schema_cache = None
 
@@ -1613,6 +1631,33 @@ class ScanStorage:
         except Exception as error:
             self._logger.error("Failed to update user profile: %s", str(error))
             return False
+
+    def log_remediation_action(self, scan_id: str, user_id: str, vuln_id: str, action: str, language: str = "") -> bool:
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        """INSERT INTO public.remediation_history (scan_id, user_id, vuln_id, action, language)
+                           VALUES (%s, %s, %s, %s, %s)""",
+                        (uuid.UUID(str(scan_id)), uuid.UUID(str(user_id)), vuln_id, action, language),
+                    )
+                    return True
+        except Exception as error:
+            self._logger.error("Failed to log remediation action: %s", str(error))
+            return False
+
+    def fetch_remediation_history(self, scan_id: str, user_id: str) -> list[Dict[str, Any]]:
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(row_factory=psycopg.rows.dict_row) as cursor:
+                    cursor.execute(
+                        """SELECT * FROM public.remediation_history
+                           WHERE scan_id = %s AND user_id = %s ORDER BY created_at DESC""",
+                        (uuid.UUID(str(scan_id)), uuid.UUID(str(user_id))),
+                    )
+                    return cursor.fetchall()
+        except Exception:
+            return []
 
     def count_magic_links_recent(self, email: str, hours: int = 1) -> int:
         try:

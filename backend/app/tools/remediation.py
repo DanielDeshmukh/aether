@@ -10,29 +10,55 @@ except ImportError:  # pragma: no cover - resolved when requirements are install
 
 HEADER_FIXES = {
     "strict-transport-security": {
-        "title": "Enable HSTS in Nginx",
+        "title": "Enable HSTS",
         "language": "nginx",
-        "code": """add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;""",
+        "variants": {
+            "nginx": {"language": "nginx", "code": 'add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;'},
+            "apache": {"language": "apache", "code": 'Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"'},
+            "node": {"language": "javascript", "code": "const helmet = require('helmet');\napp.use(helmet.hsts({ maxAge: 31536000, includeSubDomains: true }));"},
+            "python": {"language": "python", "code": "# Django settings.py\nSECURE_HSTS_SECONDS = 31536000\nSECURE_HSTS_INCLUDE_SUBDOMAINS = True\nSECURE_HSTS_PRELOAD = True"},
+        },
+        "code": 'add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;',
     },
     "content-security-policy": {
-        "title": "Add CSP in Nginx",
+        "title": "Add CSP",
         "language": "nginx",
-        "code": """add_header Content-Security-Policy "default-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self';" always;""",
+        "variants": {
+            "nginx": {"language": "nginx", "code": 'add_header Content-Security-Policy "default-src \'self\'; object-src \'none\'; frame-ancestors \'none\'; base-uri \'self\';" always;'},
+            "apache": {"language": "apache", "code": "Header always set Content-Security-Policy \"default-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self';\""},
+            "node": {"language": "javascript", "code": "const helmet = require('helmet');\napp.use(helmet.contentSecurityPolicy({ directives: { defaultSrc: [\"'self\"], objectSrc: [\"'none\"], frameAncestors: [\"'none\"] } }));"},
+        },
+        "code": 'add_header Content-Security-Policy "default-src \'self\'; object-src \'none\'; frame-ancestors \'none\'; base-uri \'self\';" always;',
     },
     "x-frame-options": {
-        "title": "Block framing in Nginx",
+        "title": "Block framing",
         "language": "nginx",
-        "code": """add_header X-Frame-Options "DENY" always;""",
+        "variants": {
+            "nginx": {"language": "nginx", "code": 'add_header X-Frame-Options "DENY" always;'},
+            "apache": {"language": "apache", "code": 'Header always set X-Frame-Options "DENY"'},
+            "node": {"language": "javascript", "code": "const helmet = require('helmet');\napp.use(helmet.frameguard({ action: 'deny' }));"},
+        },
+        "code": 'add_header X-Frame-Options "DENY" always;',
     },
     "x-content-type-options": {
-        "title": "Disable MIME sniffing in Nginx",
+        "title": "Disable MIME sniffing",
         "language": "nginx",
-        "code": """add_header X-Content-Type-Options "nosniff" always;""",
+        "variants": {
+            "nginx": {"language": "nginx", "code": 'add_header X-Content-Type-Options "nosniff" always;'},
+            "apache": {"language": "apache", "code": 'Header always set X-Content-Type-Options "nosniff"'},
+            "node": {"language": "javascript", "code": "const helmet = require('helmet');\napp.use(helmet.noSniff());"},
+        },
+        "code": 'add_header X-Content-Type-Options "nosniff" always;',
     },
     "referrer-policy": {
-        "title": "Set Referrer-Policy in Nginx",
+        "title": "Set Referrer-Policy",
         "language": "nginx",
-        "code": """add_header Referrer-Policy "strict-origin-when-cross-origin" always;""",
+        "variants": {
+            "nginx": {"language": "nginx", "code": 'add_header Referrer-Policy "strict-origin-when-cross-origin" always;'},
+            "apache": {"language": "apache", "code": 'Header always set Referrer-Policy "strict-origin-when-cross-origin"'},
+            "node": {"language": "javascript", "code": "const helmet = require('helmet');\napp.use(helmet.referrerPolicy({ policy: 'strict-origin-when-cross-origin' }));"},
+        },
+        "code": 'add_header Referrer-Policy "strict-origin-when-cross-origin" always;',
     },
 }
 
@@ -106,7 +132,7 @@ Rules:
         return _fallback_fix(vulnerability)
 
 
-def find_vulnerability(results: Dict[str, Any], vuln_id: str) -> Dict[str, Any] | None:
+def find_vulnerability(results: Dict[str, Any], vuln_id: str, scan_id: str = None, user_id: str = None) -> Dict[str, Any] | None:
     header_findings: List[Dict[str, Any]] = (results.get("header_audit") or {}).get("findings", [])
     for finding in header_findings:
         if finding.get("id") == vuln_id:
@@ -115,4 +141,17 @@ def find_vulnerability(results: Dict[str, Any], vuln_id: str) -> Dict[str, Any] 
     for finding in audit_findings:
         if finding.get("id") == vuln_id:
             return finding
+
+    if scan_id and user_id:
+        try:
+            from app.services.storage import ScanStorage
+            storage = ScanStorage()
+            if storage.database_configured():
+                vulns = storage.fetch_vulnerabilities(scan_id, user_id)
+                for v in vulns:
+                    if str(v.get("id")) == vuln_id:
+                        return v
+        except Exception:
+            pass
+
     return None
