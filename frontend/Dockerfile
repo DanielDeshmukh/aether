@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
-COPY ./
+COPY . .
 
 ARG VITE_API_URL=
 ARG VITE_SUPABASE_URL
