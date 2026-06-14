@@ -7,7 +7,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-COPY backend/requirements.txt ./requirements.txt
+COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir --prefix=/install -r requirements.txt
 
@@ -23,10 +23,10 @@ WORKDIR /app
 COPY --from=builder /install /usr/local
 
 # Copy application code
-COPY backend/app ./app
-COPY backend/main.py ./main.py
-COPY backend/start.sh ./start.sh
-COPY backend/.env.example ./.env.example
+COPY app ./app
+COPY main.py ./main.py
+COPY start.sh ./start.sh
+COPY .env.example ./.env.example
 
 RUN chmod +x /app/start.sh
 
