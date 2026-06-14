@@ -16,8 +16,8 @@ try:
     from playwright.async_api import TimeoutError as PlaywrightTimeoutError
     from playwright.async_api import async_playwright
 except ImportError:  # pragma: no cover - resolved when requirements are installed
-    PlaywrightTimeoutError = Exception
-    async_playwright = None
+    PlaywrightTimeoutError = Exception  # type: ignore[misc,assignment]
+    async_playwright = None  # type: ignore[assignment]
 
 from app.tools.audit_engine import format_audit_logs
 from app.engine.heuristic_engine import HeuristicEngine
@@ -28,7 +28,7 @@ from app.tools.scanner import format_port_logs, port_scan
 try:
     from google import genai
 except ImportError:  # pragma: no cover - resolved when requirements are installed
-    genai = None
+    genai = None  # type: ignore[assignment]
 
 logger = logging.getLogger("aether.brain")
 
@@ -312,7 +312,7 @@ Rules:
         findings = header_audit_result.get("findings", [])
         hunt_findings = audit_result.get("findings", [])
 
-        threat_level = "low"
+        threat_level: Literal["low", "medium", "high", "critical"] = "low"
         if findings or hunt_findings or len(open_ports) >= 3:
             threat_level = "medium"
         if len(findings) + len(hunt_findings) >= 3 or any(port in open_ports for port in (8080, 3000, 5000)):

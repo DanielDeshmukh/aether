@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 try:
     from openai import OpenAI
 except ImportError:  # pragma: no cover - resolved when requirements are installed
-    OpenAI = None
+    OpenAI = None  # type: ignore[misc,assignment]
 
 
 logger = logging.getLogger("aether.remediation_agent")

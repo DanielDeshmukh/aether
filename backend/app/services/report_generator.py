@@ -102,7 +102,7 @@ async def render_pdf_report(scan: dict, vulnerabilities: list[dict], profiles: l
     threat_level = (final_report.get("threat_level") or scan.get("threat_level") or "unknown").upper()
     threat_color = severity_colors.get(threat_level, "#6b7280")
     vuln_count = len(vulnerabilities)
-    severity_counts = {}
+    severity_counts: dict[str, int] = {}
     for v in vulnerabilities:
         sev = (v.get("severity") or "unknown").upper()
         severity_counts[sev] = severity_counts.get(sev, 0) + 1

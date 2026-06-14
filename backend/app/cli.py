@@ -8,7 +8,7 @@ import time
 import json
 import threading
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import click
 
@@ -604,7 +604,7 @@ def status(json_output: bool):
     import urllib.request
     import urllib.error
 
-    services = {
+    services: dict[str, Any] = {
         "backend": {"url": "http://localhost:8000/health", "port": 8000},
         "frontend": {"url": "http://localhost:5173", "port": 5173},
         "postgres": {"port": 5432},

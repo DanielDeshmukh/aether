@@ -13,8 +13,8 @@ try:
     from playwright.async_api import BrowserContext
     from playwright.async_api import Page
 except ImportError:  # pragma: no cover - resolved when requirements are installed
-    BrowserContext = Any  # type: ignore[assignment]
-    Page = Any  # type: ignore[assignment]
+    BrowserContext = Any  # type: ignore[misc,assignment]
+    Page = Any  # type: ignore[misc,assignment]
 
 
 # SQL error patterns used to detect successful SQL injection attacks.
@@ -417,7 +417,7 @@ class ValidationLaneManager:
             pass
         finally:
             sock.close()
-        return tls_ok, cert_expiry
+        return tls_ok, cert_expiry  # type: ignore[return-value]
 
     async def run_insecure_design_lane(self, context: BrowserContext, target_url: str) -> List[LaneFinding]:
         await self._require_verified_target(target_url)

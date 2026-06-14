@@ -14,7 +14,7 @@ from psycopg.types.json import Jsonb
 try:
     from psycopg_pool import ConnectionPool
 except ModuleNotFoundError:  # pragma: no cover - depends on deployment extras
-    ConnectionPool = None
+    ConnectionPool = None  # type: ignore[misc,assignment]
 from app.services.validators import validate_and_build_rows
 
 
@@ -202,7 +202,7 @@ class ScanStorage:
                     (resolved_scan_id,),
                 )
                 row = cursor.fetchone()
-        return bool(row) and row[0] != normalized_user_id
+        return bool(row) and row[0] != normalized_user_id  # type: ignore[index]
 
     def _get_table_column_names(self, table_name: str) -> set[str]:
         with self.get_connection() as connection:
@@ -791,7 +791,7 @@ class ScanStorage:
             id_column=sql.Identifier(id_column),
         )
         cursor.execute(statement, (expected_ids,))
-        row_count = cursor.fetchone()[0]
+        row_count = cursor.fetchone()[0]  # type: ignore[index]
 
         if row_count != len(expected_ids):
             self._logger.error(
@@ -1209,7 +1209,7 @@ class ScanStorage:
                             """,
                             (session_uuid,),
                         )
-                        session_exists = cursor.fetchone()[0]
+                        session_exists = cursor.fetchone()[0]  # type: ignore[index]
                         if session_exists == 0:
                             raise Exception("RELATION_FAILURE: session %s not found in scan_sessions" % session_uuid)
 
@@ -1221,7 +1221,7 @@ class ScanStorage:
                             """,
                             (scan_uuid, session_uuid),
                         )
-                        vulnerability_count = cursor.fetchone()[0]
+                        vulnerability_count = cursor.fetchone()[0]  # type: ignore[index]
                         if vulnerability_count < len(vulnerability_rows):
                             self._logger.warning(
                                 "Vulnerability count mismatch: expected %s, found %s",
@@ -1238,7 +1238,7 @@ class ScanStorage:
                             """,
                             (scan_uuid,),
                         )
-                        profile_scan_relation_count = cursor.fetchone()[0]
+                        profile_scan_relation_count = cursor.fetchone()[0]  # type: ignore[index]
                         if profile_scan_relation_count != len(profile_rows):
                             raise Exception("RELATION_FAILURE: each profile.scan_id must exist in scans")
 
@@ -1253,7 +1253,7 @@ class ScanStorage:
                             """,
                             (session_uuid,),
                         )
-                        session_profile_relation_count = cursor.fetchone()[0]
+                        session_profile_relation_count = cursor.fetchone()[0]  # type: ignore[index]
                         if session_profile_relation_count < 1:
                             raise Exception("RELATION_FAILURE: each session.user_id must exist in profiles")
 
@@ -1261,13 +1261,13 @@ class ScanStorage:
                             "select count(*) from public.profiles where scan_id = %s",
                             (scan_uuid,),
                         )
-                        profile_count = cursor.fetchone()[0]
+                        profile_count = cursor.fetchone()[0]  # type: ignore[index]
 
                         cursor.execute(
                             "select count(*) from public.scan_sessions where scan_id = %s",
                             (scan_uuid,),
                         )
-                        session_count = cursor.fetchone()[0]
+                        session_count = cursor.fetchone()[0]  # type: ignore[index]
 
                         if vulnerability_count < 1:
                             raise Exception("RELATION_FAILURE: scan has no vulnerabilities")
@@ -1627,7 +1627,7 @@ class ScanStorage:
                         params.append(email)
                     if not updates:
                         return False
-                    params.append(uuid.UUID(str(user_id)))
+                    params.append(str(uuid.UUID(str(user_id))))
                     cursor.execute(
                         f"UPDATE public.users SET {', '.join(updates)} WHERE id = %s",
                         params,

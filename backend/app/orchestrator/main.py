@@ -6,7 +6,7 @@ import sys
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
@@ -59,7 +59,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-active_scans: Dict[str, Dict[str, str | bool]] = {}
+active_scans: Dict[str, Dict[str, Any]] = {}
 brain_sessions: Dict[str, BrainOrchestrator] = {}
 scan_storage = ScanStorage()
 
@@ -96,11 +96,12 @@ def build_reasoning_logs(target_url: str) -> List[dict]:
 
 def create_scan_record(target_url: str, user_id: str | None = None) -> dict:
     scan_id = uuid.uuid4().hex[:8]
-    active_scans[scan_id] = {
+    scan_record: Dict[str, Any] = {
         "active": True,
         "target_url": target_url,
         "user_id": user_id,
     }
+    active_scans[scan_id] = scan_record
     brain_sessions[scan_id] = BrainOrchestrator(scan_id=scan_id, target_url=target_url)
     return {"scan_id": scan_id, "target_url": target_url}
 
@@ -124,29 +125,17 @@ def persist_scan_state(scan_id: str, brain: BrainOrchestrator, target_url: str, 
         logger.warning("Attempted to persist scan state without user_id for scan_id=%s", scan_id)
         return False
 
-    # If the scan is complete, perform full multi-table persistence
-    if brain.state.status == BrainStatus.COMPLETE:
-        return scan_storage.persist_scan_results(
-            scan_id=scan_id,
-            user_id=user_id,
-            target_url=target_url,
-            brain_status=brain.state.status.value,
-            initial_plan=brain.serialize_initial_plan(),
-            results=brain.serialize_results(),
-            final_report=brain.serialize_final_report(),
-            remediations=brain.serialize_remediations(),
-        )
-
-    # Otherwise, update progress in the main scans table for live dashboard sync
-    return scan_storage.upsert_scan(
+    session_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sess_{scan_id}"))
+    return scan_storage.persist_full_pipeline(
         scan_id=scan_id,
+        user_id=user_id,
         target_url=target_url,
         initial_plan=brain.serialize_initial_plan(),
         brain_status=brain.state.status.value,
+        session_id=session_id,
         results=brain.serialize_results(),
         final_report=brain.serialize_final_report(),
         remediations=brain.serialize_remediations(),
-        user_id=user_id,
     )
 
 
@@ -480,7 +469,7 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
         return
 
     target_url = str(scan["target_url"])
-    user_id = scan.get("user_id")
+    user_id: str | None = scan.get("user_id")
 
     try:
         await brain.ensure_initial_plan()
@@ -691,7 +680,7 @@ async def websocket_remediation(websocket: WebSocket, scan_id: str):
     except Exception:
         logger.exception("Remediation schema sync failed for %s", scan_id)
 
-    user_id = websocket.query_params.get("user_id")
+    user_id: str | None = websocket.query_params.get("user_id")
 
     record = scan_storage.fetch_scan(scan_id, user_id=user_id) if user_id else None
     if not record:
@@ -721,6 +710,7 @@ async def websocket_remediation(websocket: WebSocket, scan_id: str):
 
             vuln_id = (payload.get("vuln_id") or "").strip()
             remediation = await brain.generate_fix(vuln_id)
+            assert user_id is not None
             persisted = scan_storage.save_remediations(scan_id=scan_id, user_id=user_id, remediations=brain.serialize_remediations())
             await safe_send_json(
                 websocket,

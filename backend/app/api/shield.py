@@ -47,7 +47,7 @@ class AetherShield:
         if not all([scan_id, user_id, token]):
             return False
 
-        return AetherShield.verify_token(token, scan_id, user_id)
+        return AetherShield.verify_token(token, scan_id, user_id)  # type: ignore[arg-type]
 
 
 class AetherShieldMiddleware(BaseHTTPMiddleware):

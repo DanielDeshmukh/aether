@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 try:
     from google import genai
 except ImportError:  # pragma: no cover - resolved when requirements are installed
-    genai = None
+    genai = None  # type: ignore[assignment]
 
 
 HEADER_FIXES = {
@@ -158,7 +158,7 @@ Rules:
             contents=genai.types.Content(parts=[genai.types.Part(text=prompt)]),
             config={"response_mime_type": "application/json"},
         )
-        cleaned = response.text.strip()
+        cleaned = (response.text or "").strip()
         if cleaned.startswith("```"):
             cleaned = cleaned.strip("`")
             cleaned = cleaned.removeprefix("json").strip()
@@ -174,7 +174,7 @@ Rules:
         return _fallback_fix(vulnerability)
 
 
-def find_vulnerability(results: Dict[str, Any], vuln_id: str, scan_id: str = None, user_id: str = None) -> Dict[str, Any] | None:
+def find_vulnerability(results: Dict[str, Any], vuln_id: str, scan_id: str | None = None, user_id: str | None = None) -> Dict[str, Any] | None:
     header_findings: List[Dict[str, Any]] = (results.get("header_audit") or {}).get("findings", [])
     for finding in header_findings:
         if finding.get("id") == vuln_id:

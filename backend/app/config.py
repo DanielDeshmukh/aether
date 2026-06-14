@@ -61,11 +61,11 @@ class AppConfig:
     port: int = 8000
     web_concurrency: int = 2
     
-    database: DatabaseConfig = None
-    redis: RedisConfig = None
-    jwt: JWTConfig = None
-    smtp: SMTPConfig = None
-    oauth: OAuthConfig = None
+    database: DatabaseConfig | None = None
+    redis: RedisConfig | None = None
+    jwt: JWTConfig | None = None
+    smtp: SMTPConfig | None = None
+    oauth: OAuthConfig | None = None
     
     def __post_init__(self):
         """Initialize sub-configurations from environment variables."""
@@ -124,6 +124,8 @@ def get_config() -> AppConfig:
     # Production-specific overrides
     if environment == "production":
         config.debug = False
+        assert config.database is not None
+        assert config.jwt is not None
         config.database.pool_size = int(os.getenv("DB_POOL_SIZE", "20"))
         config.database.max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "20"))
         config.jwt.access_token_expire_minutes = int(os.getenv("JWT_ACCESS_EXPIRE_MINUTES", "30"))

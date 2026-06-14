@@ -8,7 +8,7 @@ import logging
 import os
 import sys
 import uuid
-from typing import Dict, List
+from typing import Any, Dict, List
 from urllib.parse import urlparse
 from dotenv import load_dotenv
 
@@ -186,7 +186,7 @@ app.add_middleware(StructuredLoggingMiddleware)
 app.add_middleware(HTTPSRedirectMiddleware)
 app.add_middleware(RequestTimeoutMiddleware, timeout=float(os.getenv("REQUEST_TIMEOUT", "30")))
 
-active_scans: Dict[str, Dict[str, str | bool]] = {}
+active_scans: Dict[str, Dict[str, Any]] = {}
 brain_sessions: Dict[str, BrainOrchestrator] = {}
 dashboard_connections: set = set()
 scan_storage = ScanStorage()
@@ -226,11 +226,12 @@ def build_reasoning_logs(target_url: str) -> List[dict]:
 
 def create_scan_record(target_url: str, user_id: str | None = None) -> dict:
     scan_id = uuid.uuid4().hex[:8]
-    active_scans[scan_id] = {
+    scan_record: Dict[str, Any] = {
         "active": True,
         "target_url": target_url,
         "user_id": user_id,
     }
+    active_scans[scan_id] = scan_record
     brain_sessions[scan_id] = BrainOrchestrator(scan_id=scan_id, target_url=target_url)
     return standard_response(data={"scan_id": scan_id, "target_url": target_url})
 
@@ -521,7 +522,7 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
         return
 
     target_url = str(scan["target_url"])
-    user_id = scan.get("user_id")
+    user_id: str | None = scan.get("user_id")
     resolved_scan_id = scan_storage.resolve_record_identifier(scan_id)
     resolved_session_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sess_{scan_id}"))
     nvidia_mode = use_nvidia_orchestrator()
@@ -967,12 +968,13 @@ async def compare_scans(ids: str, user_id: str = Depends(get_current_user)):
     result = []
     for scan in scans:
         vulns = scan_storage.fetch_vulnerabilities(str(scan["id"]), user_id)
+        created = scan.get("created_at")
         result.append({
             "scan_id": str(scan["id"]),
             "target_url": scan.get("target_url"),
             "status": scan.get("status"),
             "threat_level": scan.get("threat_level"),
-            "created_at": scan.get("created_at").isoformat() if scan.get("created_at") else None,
+            "created_at": created.isoformat() if created else None,
             "vulnerability_count": len(vulns),
             "vulnerabilities": [{"title": v.get("title"), "severity": v.get("severity"), "category": v.get("category")} for v in vulns],
         })
@@ -1004,13 +1006,15 @@ async def export_scan(scan_id: str, format: str = "json", user_id: str = Depends
     vulnerabilities = scan_storage.fetch_vulnerabilities(scan_id, user_id)
     profiles = scan_storage.fetch_profiles(scan_id, user_id)
 
+    created = record.get("created_at")
+    completed = record.get("completed_at")
     export_data = {
         "scan_id": scan_id,
         "target_url": record.get("target_url"),
         "status": record.get("status"),
         "threat_level": record.get("threat_level"),
-        "created_at": record.get("created_at").isoformat() if record.get("created_at") else None,
-        "completed_at": record.get("completed_at").isoformat() if record.get("completed_at") else None,
+        "created_at": created.isoformat() if created else None,
+        "completed_at": completed.isoformat() if completed else None,
         "final_report": record.get("final_report"),
         "vulnerabilities": [
             {
@@ -1042,7 +1046,9 @@ async def export_scan(scan_id: str, format: str = "json", user_id: str = Depends
             "id", "title", "severity", "category", "detail", "attack_vector", "evidence_snippet", "provided_solution"
         ])
         writer.writeheader()
-        for v in export_data["vulnerabilities"]:
+        export_vulns = export_data.get("vulnerabilities")
+        vulns: list[dict[str, Any]] = export_vulns if isinstance(export_vulns, list) else []
+        for v in vulns:
             writer.writerow(v)
         from fastapi.responses import Response
         return Response(
@@ -1212,7 +1218,7 @@ async def websocket_remediation(websocket: WebSocket, scan_id: str):
     except Exception:
         logger.exception("Remediation schema sync failed for %s", scan_id)
 
-    user_id = websocket.query_params.get("user_id")
+    user_id: str | None = websocket.query_params.get("user_id")
 
     record = scan_storage.fetch_scan(scan_id, user_id=user_id) if user_id else None
     if not record:
@@ -1220,6 +1226,7 @@ async def websocket_remediation(websocket: WebSocket, scan_id: str):
         await websocket.close(code=1008)
         return
 
+    assert user_id is not None
     brain = hydrate_brain_from_record(scan_id=scan_id, record=record)
 
     try:
@@ -1263,8 +1270,8 @@ async def websocket_remediation(websocket: WebSocket, scan_id: str):
 
                 vulnerabilities = scan_storage.fetch_vulnerabilities(scan_id=scan_id, user_id=user_id)
                 vulnerability = next((item for item in vulnerabilities if str(item.get("id")) == vuln_id), None)
-                remediation = brain.serialize_remediations().get(vuln_id)
-                if not vulnerability or not remediation:
+                remediation_payload = brain.serialize_remediations().get(vuln_id)
+                if not vulnerability or not remediation_payload:
                     await safe_send_json(websocket, {"type": "error", "phase": "remediate", "msg": "GENERATE A REMEDIATION PACKAGE BEFORE OPENING A PULL REQUEST."})
                     continue
 
@@ -1281,7 +1288,7 @@ async def websocket_remediation(websocket: WebSocket, scan_id: str):
                     scan_id=scan_id,
                     target_url=record.get("target_url", ""),
                     vulnerability=vulnerability,
-                    remediation_payload=remediation,
+                    remediation_payload=remediation_payload,
                     public_api_base_url=derive_public_api_base_url(websocket),
                 )
                 try:

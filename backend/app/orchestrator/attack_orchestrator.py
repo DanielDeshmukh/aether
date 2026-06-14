@@ -18,12 +18,12 @@ except ImportError:  # pragma: no cover - resolved when requirements are install
 try:
     from openai import OpenAI
 except ImportError:  # pragma: no cover - resolved when requirements are installed
-    OpenAI = None
+    OpenAI = None  # type: ignore[misc,assignment]
 
 try:
     from playwright.async_api import async_playwright
 except ImportError:  # pragma: no cover - resolved when requirements are installed
-    async_playwright = None
+    async_playwright = None  # type: ignore[assignment]
 
 from app.engine.playwright_driver import build_safety_headers, create_hardened_browser_context
 from app.engine.validation_lanes import ValidationLaneManager
@@ -718,7 +718,7 @@ class AttackOrchestrator:
                     safety_audit = await self.log_monitor.generate_safety_audit_report(
                         self.rate_limiter.request_timestamps
                     )
-                    profile_rows[0]["details"]["remediation_findings"] = list(self.generated_remediations.keys())
+                    profile_rows[0]["details"]["remediation_findings"] = list(self.generated_remediations.keys())  # type: ignore[index]
                     return {
                         "status": "terminated",
                         "reason": "SCAN_TERMINATED_BY_SAFETY_GATE",
@@ -738,7 +738,7 @@ class AttackOrchestrator:
         safety_audit = await self.log_monitor.generate_safety_audit_report(
             self.rate_limiter.request_timestamps
         )
-        profile_rows[0]["details"]["remediation_findings"] = list(self.generated_remediations.keys())
+        profile_rows[0]["details"]["remediation_findings"] = list(self.generated_remediations.keys())  # type: ignore[index]
         return {
             "status": "completed",
             "tech_stack": tech_stack,
