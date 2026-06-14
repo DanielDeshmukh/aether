@@ -143,7 +143,7 @@ class TestGetOrCreateTarget(unittest.TestCase):
         mock_get_connection.return_value.__exit__ = MagicMock(return_value=None)
         
         with patch.object(mock_conn, 'cursor', return_value=mock_cursor):
-            result = self.storage.get_or_create_target(self.test_url, self.test_user_id)
+            self.storage.get_or_create_target(self.test_url, self.test_user_id)
         
         # Verify user_id was included in INSERT call
         self.assertEqual(len(execute_calls), 2)

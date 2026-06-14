@@ -1373,7 +1373,7 @@ async def websocket_dashboard(websocket: WebSocket):
     dashboard_connections.add(websocket)
     try:
         while True:
-            data = await websocket.receive_text()
+            _ = await websocket.receive_text()
     except WebSocketDisconnect:
         pass
     finally:

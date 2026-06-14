@@ -1,7 +1,6 @@
 """Check Python files for common issues."""
 import ast
 import os
-import sys
 
 def check_file(filepath):
     issues = []

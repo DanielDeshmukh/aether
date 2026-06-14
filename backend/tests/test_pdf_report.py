@@ -1,5 +1,4 @@
 import unittest
-from unittest.mock import MagicMock, patch, AsyncMock
 from app.services.report_generator import render_pdf_report
 
 

@@ -1,6 +1,5 @@
-import uuid
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from app.services.storage import ScanStorage
 
 
@@ -12,10 +11,10 @@ class TestScanStorage(unittest.TestCase):
         self.storage.get_connection = MagicMock(return_value=self.mock_connection)
 
     def test_configured(self):
-        assert self.storage.configured() == False or self.storage.configured() == True
+        assert not self.storage.configured() or self.storage.configured()
 
     def test_database_configured(self):
-        assert self.storage.database_configured() == False or self.storage.database_configured() == True
+        assert not self.storage.database_configured() or self.storage.database_configured()
 
     def test_mask_value(self):
         result = self.storage.mask_value("test123456", visible=3)

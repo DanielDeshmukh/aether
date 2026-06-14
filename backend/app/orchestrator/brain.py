@@ -377,11 +377,14 @@ Rules:
         if genai is None or not self._has_usable_api_key():
             return self._fallback_verdict(results)
 
+        # Filter results to keep size manageable for LLM
+        lite_results = {k: v for k, v in results.items() if v is not None}
+
         prompt = f"""
 You are a Lead Security Consultant writing the closing security posture summary for a tactical vulnerability hunt.
 Target URL: {target_url}
 Tool Results JSON:
-{json.dumps(results)}
+{json.dumps(lite_results)}
 
 Return raw JSON only in this exact shape:
 {{
@@ -399,8 +402,6 @@ Rules:
 
         try:
             client = genai.Client(api_key=self.api_key)
-            # Filter results to keep size manageable for LLM
-            lite_results = {k: v for k, v in results.items() if v is not None}
             verdict_prompt = prompt.strip()
             response = self._generate_with_retry(
                 client,

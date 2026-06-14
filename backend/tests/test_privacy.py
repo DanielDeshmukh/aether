@@ -1,6 +1,6 @@
 import uuid
 import unittest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock
 from app.services.storage import ScanStorage
 
 

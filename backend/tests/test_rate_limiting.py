@@ -1,4 +1,3 @@
-import time
 import unittest
 from app.api.rate_limiter import InMemoryRateLimiter
 
