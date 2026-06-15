@@ -236,6 +236,23 @@ def create_scan_record(target_url: str, user_id: str | None = None) -> dict:
     }
     active_scans[scan_id] = scan_record
     brain_sessions[scan_id] = BrainOrchestrator(scan_id=scan_id, target_url=target_url)
+
+    if user_id and scan_storage.database_configured():
+        try:
+            resolved_scan_id = uuid.UUID(scan_storage.resolve_record_identifier(scan_id))
+            user_uuid = scan_storage._coerce_uuid(user_id)
+            with scan_storage.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """INSERT INTO public.scans (id, user_id, target_url, status, created_at)
+                           VALUES (%s, %s, %s, 'pending', now())
+                           ON CONFLICT (id) DO NOTHING""",
+                        (resolved_scan_id, user_uuid, target_url),
+                    )
+                    conn.commit()
+        except Exception:
+            logger.exception("Failed to insert initial scan row for %s", scan_id)
+
     return standard_response(data={"scan_id": scan_id, "target_url": target_url})
 
 

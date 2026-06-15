@@ -73,8 +73,6 @@ jobs:
       AETHER_JWT_SECRET: test_secret_for_ci_only
       ENVIRONMENT: development
       PORT: 8000
-      VITE_API_URL: http://localhost:8000
-      PLAYWRIGHT_BASE_URL: http://localhost:5173
 
     steps:
       - uses: actions/checkout@v4
@@ -83,7 +81,6 @@ jobs:
         run: |
           echo "DATABASE_URL=${DATABASE_URL}"
           echo "AETHER_JWT_SECRET=${AETHER_JWT_SECRET}"
-          echo "VITE_API_URL=${VITE_API_URL}"
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
@@ -102,6 +99,11 @@ jobs:
         run: |
           cd backend
           pip install -r requirements.txt
+
+      - name: Install Playwright browsers (Python)
+        run: |
+          cd backend
+          python -m playwright install chromium --with-deps
 
       - name: Wait for PostgreSQL
         run: |
@@ -139,7 +141,7 @@ jobs:
           cd frontend
           npm ci
 
-      - name: Install Playwright browsers
+      - name: Install Playwright browsers (Node)
         run: |
           cd frontend
           npx playwright install --with-deps chromium

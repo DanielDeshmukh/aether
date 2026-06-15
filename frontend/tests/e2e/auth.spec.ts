@@ -87,9 +87,12 @@ test.describe('Authentication Flow', () => {
 
       await page.goto(
         `${FRONTEND_BASE}/auth/callback?access_token=${mockAccessToken}&refresh_token=${mockRefreshToken}`,
+        { waitUntil: 'domcontentloaded' },
       );
 
-      await page.waitForTimeout(2000);
+      await page.waitForFunction(() => {
+        return localStorage.getItem('aether_access_token') !== null;
+      }, { timeout: 10000 });
 
       const storedAccess = await page.evaluate(() => localStorage.getItem('aether_access_token'));
       expect(storedAccess).toBeTruthy();
