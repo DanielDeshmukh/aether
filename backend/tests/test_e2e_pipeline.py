@@ -50,7 +50,10 @@ class TestAuthPipeline:
         response = client.get("/api/v1/auth/me")
         assert response.status_code == 401
 
-    def test_me_endpoint_returns_user_with_valid_token(self, client, auth_headers):
+    @patch('app.api.auth_routes.storage')
+    def test_me_endpoint_returns_user_with_valid_token(self, mock_auth_storage, client, auth_headers):
+        mock_auth_storage.get_connection.return_value.__enter__ = MagicMock(return_value=MagicMock())
+        mock_auth_storage.get_connection.return_value.__exit__ = MagicMock(return_value=False)
         response = client.get("/api/v1/auth/me", headers=auth_headers)
         assert response.status_code in [200, 401]
 
@@ -79,6 +82,7 @@ class TestScanCreationPipeline:
         mock_storage.ensure_schema = MagicMock()
         mock_storage.log_consent.return_value = True
         mock_storage.get_or_create_target.return_value = "target-123"
+        mock_storage.get_scan_count.return_value = 0
 
         response = client.post(
             "/api/v1/scans",
@@ -87,7 +91,11 @@ class TestScanCreationPipeline:
         )
         assert response.status_code == 400
 
-    def test_create_scan_rejects_private_targets(self, client, auth_headers):
+    @patch('app.api.main.scan_storage')
+    def test_create_scan_rejects_private_targets(self, mock_storage, client, auth_headers):
+        mock_storage.ensure_schema = MagicMock()
+        mock_storage.get_scan_count.return_value = 0
+
         response = client.post(
             "/api/v1/scans",
             json={"target_url": "http://192.168.1.1", "consent_confirmed": True},
