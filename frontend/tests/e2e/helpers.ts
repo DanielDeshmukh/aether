@@ -1,7 +1,7 @@
 import { type Page, type BrowserContext } from '@playwright/test';
 
-const API_BASE = process.env.VITE_API_URL || 'http://localhost:8000';
-const FRONTEND_BASE = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5173';
+export const API_BASE = process.env.VITE_API_URL || 'http://localhost:8000';
+export const FRONTEND_BASE = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5173';
 
 export function generateTestToken(userId: string, email: string): string {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
@@ -58,7 +58,7 @@ export async function navigateToAuth(page: Page) {
 
 export async function fillUrlAndConsent(page: Page, targetUrl: string) {
   await page.fill('input[type="url"]', targetUrl);
-  await page.click('input[type="checkbox"]');
+  await page.locator('input[type="checkbox"]').click({ force: true });
 }
 
 export async function submitScan(page: Page) {
@@ -97,7 +97,7 @@ export async function getScanFromApi(page: Page, scanId: string) {
 export async function downloadPdfReport(page: Page, scanId: string) {
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.click('button', { hasText: 'Download PDF' }),
+    page.locator('button', { hasText: 'Download PDF' }).click(),
   ]);
   return download;
 }

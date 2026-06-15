@@ -34,7 +34,7 @@ test.describe('Scan Pipeline - Complete OWASP Workflow', () => {
     await page.fill('input[type="url"]', TEST_TARGET_URL);
     await expect(submitBtn).toBeDisabled();
 
-    await page.click('input[type="checkbox"]');
+    await page.locator('input[type="checkbox"]').click({ force: true });
     await expect(submitBtn).toBeEnabled();
   });
 
@@ -54,7 +54,7 @@ test.describe('Scan Pipeline - Complete OWASP Workflow', () => {
     await fillUrlAndConsent(page, TEST_TARGET_URL);
     await submitScan(page);
 
-    await page.click('button', { hasText: 'Abort' });
+    await page.locator('button', { hasText: 'Abort' }).click();
     await expect(page.locator('text=Target Acquisition')).toBeVisible();
   });
 

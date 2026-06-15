@@ -20,7 +20,10 @@ from app.services.storage import ScanStorage
 from app.api.deps import get_current_user
 from app.tools.validators import is_safe_url
 
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+env_path = Path(__file__).resolve().parents[2] / ".env"
+if not env_path.exists():
+    env_path = Path(__file__).resolve().parents[3] / ".env"
+load_dotenv(env_path)
 
 # Windows-specific fix for Playwright and asyncio subprocess handling
 if sys.platform == "win32":

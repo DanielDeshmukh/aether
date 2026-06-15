@@ -14,6 +14,7 @@ __pycache__/
 **/__pycache__/
 .pytest_cache/
 frontend/dist/
+frontend/test-results/
 dist/
 *.log
 .claude/

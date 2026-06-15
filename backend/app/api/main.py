@@ -34,7 +34,10 @@ from app.api.deps import get_current_user, check_scan_quota  # noqa: E402
 from app.api.shield import AetherShieldMiddleware  # noqa: E402
 from app.tools.validators import is_safe_url  # noqa: E402
 
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+env_path = Path(__file__).resolve().parents[2] / ".env"
+if not env_path.exists():
+    env_path = Path(__file__).resolve().parents[3] / ".env"
+load_dotenv(env_path)
 
 logger = logging.getLogger("aether.api")
 

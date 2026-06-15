@@ -32,7 +32,7 @@ test.describe('Authentication Flow', () => {
       await navigateToAuth(page);
 
       await page.fill('input[type="email"]', 'test@aether.dev');
-      await page.click('button', { hasText: 'Send Magic Link' });
+      await page.locator('button', { hasText: 'Send Magic Link' }).click();
 
       await expect(page.locator('text=MAGIC LINK SENT')).toBeVisible({ timeout: 10000 });
     });
