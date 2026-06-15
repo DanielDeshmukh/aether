@@ -8,8 +8,9 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 // https://vite.dev/config/
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
   const envDir = path.resolve(__dirname, '..')
+  const isProduction = mode === 'production'
 
   return {
     envDir,
@@ -23,6 +24,19 @@ export default defineConfig(() => {
         '/ws': {
           target: 'ws://localhost:8000',
           ws: true,
+        },
+      },
+    },
+    build: {
+      target: 'es2020',
+      minify: 'esbuild',
+      sourcemap: isProduction ? false : true,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ['react', 'react-dom', 'react-router-dom'],
+            motion: ['framer-motion'],
+          },
         },
       },
     },
