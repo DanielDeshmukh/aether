@@ -9,6 +9,7 @@ export async function apiRequest(url, options = {}) {
   }
 
   const response = await fetch(buildApiUrl(url), {
+    credentials: "same-origin",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -23,6 +24,7 @@ export async function apiRequest(url, options = {}) {
       throw new Error("Session expired. Please log in again.");
     }
     const retryResponse = await fetch(buildApiUrl(url), {
+      credentials: "same-origin",
       ...options,
       headers: {
         "Content-Type": "application/json",
