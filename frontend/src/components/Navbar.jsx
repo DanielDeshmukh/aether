@@ -28,6 +28,14 @@ const Navbar = () => {
               <span className="absolute -bottom-2 left-0 h-[1px] w-0 bg-[#d4af37] transition-all group-hover:w-full"></span>
             </a>
           ))}
+        <Link to="/security" className="relative group transition-all hover:text-[#d4af37]">
+          Security
+          <span className="absolute -bottom-2 left-0 h-[1px] w-0 bg-[#d4af37] transition-all group-hover:w-full"></span>
+        </Link>
+        <Link to="/legal" className="relative group transition-all hover:text-[#d4af37]">
+          Legal
+          <span className="absolute -bottom-2 left-0 h-[1px] w-0 bg-[#d4af37] transition-all group-hover:w-full"></span>
+        </Link>
         <Link to="/join-us" className="relative group transition-all hover:text-[#d4af37]">
           Login
           <span className="absolute -bottom-2 left-0 h-[1px] w-0 bg-[#d4af37] transition-all group-hover:w-full"></span>
