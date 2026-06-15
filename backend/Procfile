@@ -1,0 +1,1 @@
+web: cd /app && gunicorn app.api.main:app -k uvicorn.workers.UvicornWorker -c ../deploy/gunicorn.conf.py
