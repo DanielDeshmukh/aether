@@ -1,0 +1,14 @@
+[phases.setup]
+nixPkgs = ["nodejs_22"]
+
+[phases.install]
+nixPkgs = ["chromium", "fontconfig", "libnss3", "libatk1.0-0", "libatk-bridge2.0-0", "libcups2", "libdrm2", "libxkbcommon0", "libxcomposite1", "libxdamage1", "libxrandr2", "libgbm1", "libpango-1.0-0", "libcairo2", "libasound2", "libxshmfence1", "libx11-xcb1", "libxcb-dri3-0", "libxext6", "libxfixes3", "libxi6", "libxtst6", "libx11-6"]
+
+[phases.build]
+cmds = ["pip install -r backend/requirements.txt", "playwright install chromium"]
+
+[phases.run]
+ cmds = ["cd backend && gunicorn app.api.main:app -k uvicorn.workers.UvicornWorker -c ../deploy/gunicorn.conf.py"]
+
+[deploy]
+start = "cd backend && gunicorn app.api.main:app -k uvicorn.workers.UvicornWorker -c ../deploy/gunicorn.conf.py"
