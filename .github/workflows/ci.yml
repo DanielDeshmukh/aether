@@ -20,7 +20,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U aether"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -63,7 +63,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U aether"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -78,6 +78,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Verify environment variables
+        run: |
+          echo "DATABASE_URL=${DATABASE_URL}"
+          echo "AETHER_JWT_SECRET=${AETHER_JWT_SECRET}"
+          echo "VITE_API_URL=${VITE_API_URL}"
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
@@ -97,9 +103,25 @@ jobs:
           cd backend
           pip install -r requirements.txt
 
+      - name: Wait for PostgreSQL
+        run: |
+          echo "Waiting for PostgreSQL to be ready..."
+          for i in $(seq 1 30); do
+            if pg_isready -h localhost -p 5432 -U aether > /dev/null 2>&1; then
+              echo "PostgreSQL is ready!"
+              break
+            fi
+            echo "Attempt $i/30..."
+            sleep 2
+          done
+
       - name: Start backend server
         run: |
           cd backend
+          DATABASE_URL="postgresql://aether:test_password@localhost:5432/aether" \
+          AETHER_JWT_SECRET="test_secret_for_ci_only" \
+          ENVIRONMENT="development" \
+          PORT=8000 \
           python -m uvicorn app.api.main:app --host 0.0.0.0 --port 8000 &
           echo "Waiting for backend to start..."
           for i in $(seq 1 30); do
@@ -125,7 +147,7 @@ jobs:
       - name: Start frontend dev server
         run: |
           cd frontend
-          npm run dev &
+          VITE_API_URL="http://localhost:8000" npm run dev &
           echo "Waiting for frontend to start..."
           for i in $(seq 1 30); do
             if curl -s http://localhost:5173 > /dev/null 2>&1; then
@@ -138,6 +160,9 @@ jobs:
           curl -s http://localhost:5173 > /dev/null || echo "WARNING: Frontend check failed"
 
       - name: Run E2E tests
+        env:
+          VITE_API_URL: http://localhost:8000
+          PLAYWRIGHT_BASE_URL: http://localhost:5173
         run: |
           cd frontend
           npx playwright test --reporter=list
