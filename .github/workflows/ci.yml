@@ -68,6 +68,14 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+    env:
+      DATABASE_URL: postgresql://aether:test_password@localhost:5432/aether
+      AETHER_JWT_SECRET: test_secret_for_ci_only
+      ENVIRONMENT: development
+      PORT: 8000
+      VITE_API_URL: http://localhost:8000
+      PLAYWRIGHT_BASE_URL: http://localhost:5173
+
     steps:
       - uses: actions/checkout@v4
 
@@ -90,15 +98,19 @@ jobs:
           pip install -r requirements.txt
 
       - name: Start backend server
-        env:
-          DATABASE_URL: postgresql://aether:test_password@localhost:5432/aether
-          AETHER_JWT_SECRET: test_secret_for_ci_only
-          ENVIRONMENT: development
-          PORT: 8000
         run: |
           cd backend
           python -m uvicorn app.api.main:app --host 0.0.0.0 --port 8000 &
-          sleep 5
+          echo "Waiting for backend to start..."
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:8000/health > /dev/null 2>&1; then
+              echo "Backend is ready!"
+              break
+            fi
+            echo "Attempt $i/30..."
+            sleep 2
+          done
+          curl -s http://localhost:8000/health || echo "WARNING: Backend health check failed"
 
       - name: Install frontend dependencies
         run: |
@@ -110,9 +122,22 @@ jobs:
           cd frontend
           npx playwright install --with-deps chromium
 
+      - name: Start frontend dev server
+        run: |
+          cd frontend
+          npm run dev &
+          echo "Waiting for frontend to start..."
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:5173 > /dev/null 2>&1; then
+              echo "Frontend is ready!"
+              break
+            fi
+            echo "Attempt $i/30..."
+            sleep 2
+          done
+          curl -s http://localhost:5173 > /dev/null || echo "WARNING: Frontend check failed"
+
       - name: Run E2E tests
-        env:
-          VITE_API_URL: http://localhost:8000
         run: |
           cd frontend
           npx playwright test --reporter=list
