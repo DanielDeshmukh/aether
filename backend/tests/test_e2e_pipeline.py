@@ -77,12 +77,13 @@ class TestScanCreationPipeline:
         )
         assert response.status_code == 401
 
+    @patch('app.api.deps.quota_manager')
     @patch('app.api.main.scan_storage')
-    def test_create_scan_requires_consent(self, mock_storage, client, auth_headers):
-        mock_storage.ensure_schema = MagicMock()
-        mock_storage.log_consent.return_value = True
-        mock_storage.get_or_create_target.return_value = "target-123"
-        mock_storage.get_scan_count.return_value = 0
+    def test_create_scan_requires_consent(self, mock_main_storage, mock_quota, client, auth_headers):
+        mock_quota.check_quota.return_value = {"allowed": True, "used": 0, "limit": 3}
+        mock_main_storage.ensure_schema = MagicMock()
+        mock_main_storage.log_consent.return_value = True
+        mock_main_storage.get_or_create_target.return_value = "target-123"
 
         response = client.post(
             "/api/v1/scans",
@@ -91,10 +92,11 @@ class TestScanCreationPipeline:
         )
         assert response.status_code == 400
 
+    @patch('app.api.deps.quota_manager')
     @patch('app.api.main.scan_storage')
-    def test_create_scan_rejects_private_targets(self, mock_storage, client, auth_headers):
-        mock_storage.ensure_schema = MagicMock()
-        mock_storage.get_scan_count.return_value = 0
+    def test_create_scan_rejects_private_targets(self, mock_main_storage, mock_quota, client, auth_headers):
+        mock_quota.check_quota.return_value = {"allowed": True, "used": 0, "limit": 3}
+        mock_main_storage.ensure_schema = MagicMock()
 
         response = client.post(
             "/api/v1/scans",
@@ -103,7 +105,9 @@ class TestScanCreationPipeline:
         )
         assert response.status_code == 400
 
-    def test_create_scan_rejects_invalid_url(self, client, auth_headers):
+    @patch('app.api.deps.quota_manager')
+    def test_create_scan_rejects_invalid_url(self, mock_quota, client, auth_headers):
+        mock_quota.check_quota.return_value = {"allowed": True, "used": 0, "limit": 3}
         response = client.post(
             "/api/v1/scans",
             json={"target_url": "not-a-url", "consent_confirmed": True},
