@@ -1,0 +1,14 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "backend/Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "cd /app && gunicorn app.api.main:app -k uvicorn.workers.UvicornWorker -c ../deploy/gunicorn.conf.py",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 30,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  }
+}
