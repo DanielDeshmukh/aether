@@ -1,3 +1,4 @@
+import os
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -7,8 +8,11 @@ from app.services.storage import ScanStorage
 
 class TestQuotaManager(unittest.TestCase):
     def setUp(self):
+        self._env_patcher = patch.dict("os.environ", {"QUOTA_FREE_LIMIT": "3"}, clear=False)
+        self._env_patcher.start()
         self.storage = MagicMock(spec=ScanStorage)
         self.quota_manager = QuotaManager(self.storage)
+        self.addCleanup(self._env_patcher.stop)
 
     def test_get_limit_free_tier(self):
         self.assertEqual(self.quota_manager.get_limit("free"), 3)

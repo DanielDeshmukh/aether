@@ -35,9 +35,9 @@ test.describe('Remediation Flow', () => {
     await page.waitForLoadState('domcontentloaded');
 
     await expect(page.locator('text=Mission Debrief')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('text=// Risk Impact')).toBeVisible();
-    await expect(page.locator('text=// Remediation Steps')).toBeVisible();
-    await expect(page.locator('text=// Vulnerabilities & Remediations')).toBeVisible();
+    await expect(page.locator('text=Risk Impact')).toBeVisible();
+    await expect(page.locator('text=Remediation Steps')).toBeVisible();
+    await expect(page.locator('text=Vulnerabilities & Remediations')).toBeVisible();
   });
 
   test('should show Gemini Remediate button for each vulnerability', async ({ page }) => {

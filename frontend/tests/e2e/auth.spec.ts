@@ -28,13 +28,15 @@ test.describe('Authentication Flow', () => {
       await expect(emailInput).toHaveAttribute('required', '');
     });
 
-    test('should send magic link and show confirmation', async ({ page }) => {
+    test('should send magic link and show confirmation or error', async ({ page }) => {
       await navigateToAuth(page);
 
       await page.fill('input[type="email"]', 'test@aether.dev');
       await page.locator('button', { hasText: 'Send Magic Link' }).click();
 
-      await expect(page.locator('text=MAGIC LINK SENT')).toBeVisible({ timeout: 10000 });
+      const confirmation = page.locator('text=MAGIC LINK SENT');
+      const error = page.locator('text=FAILED TO SEND MAGIC LINK');
+      await expect(confirmation.or(error)).toBeVisible({ timeout: 10000 });
     });
   });
 

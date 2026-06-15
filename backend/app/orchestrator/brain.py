@@ -1011,9 +1011,10 @@ class BrainOrchestrator:
         self.state.resume_reason = None
         self.state.error_message = reason
         self.state.notes.append(reason)
+        truncated_reason = reason[:417] + "..." if len(reason) > 420 else reason
         self.final_report = {
             "threat_level": "critical",
-            "risk_impact": reason,
+            "risk_impact": truncated_reason,
             "remediation_steps": [
                 "Review the scan logs for the failing tool or upstream service.",
                 "Restore connectivity or credentials, then rerun the scan.",

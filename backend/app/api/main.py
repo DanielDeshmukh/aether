@@ -239,6 +239,109 @@ def create_scan_record(target_url: str, user_id: str | None = None) -> dict:
     return standard_response(data={"scan_id": scan_id, "target_url": target_url})
 
 
+async def _run_headless_scan(scan_id: str, target_url: str, user_id: str | None) -> None:
+    """Run a scan in headless mode (no WebSocket) after REST creation."""
+    brain = brain_sessions.get(scan_id)
+    scan = active_scans.get(scan_id)
+    if not brain or not scan:
+        logger.error("Headless scan %s: brain or scan record missing.", scan_id)
+        return
+
+    resolved_scan_id = scan_storage.resolve_record_identifier(scan_id)
+    resolved_session_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sess_{scan_id}"))
+    nvidia_mode = use_nvidia_orchestrator()
+
+    try:
+        scan_storage.ensure_schema()
+        persist_scan_state(scan_id, brain, target_url, user_id)
+    except Exception:
+        logger.exception("Initial headless persistence failed for %s", scan_id)
+
+    try:
+        if nvidia_mode:
+            if not user_id:
+                raise BrainBoundaryError("NVIDIA mode requires user_id for headless scan.", phase="observe")
+
+            orchestrator = AttackOrchestrator(
+                user_id=user_id,
+                scan_id=resolved_scan_id,
+                session_id=resolved_session_id,
+                storage_engine=None,
+                global_abort=GlobalAbort(
+                    is_triggered=lambda: not active_scans.get(scan_id, {}).get("active", False),
+                    reason=lambda: "SCAN_TERMINATED_BY_SAFETY_GATE",
+                ),
+                on_stage_update=lambda payload: asyncio.sleep(0),
+                on_finding_discovered=lambda finding: asyncio.sleep(0),
+                verification_service=domain_verification_manager,
+            )
+            validation_result = await orchestrator.run_validation_loop(target_url)
+            brain.execution_results["tech_stack"] = validation_result.get("tech_stack")
+            brain.execution_results["audit_engine"] = {
+                "target_url": target_url,
+                "findings": validation_result.get("findings", []),
+                "profiles": validation_result.get("profiles", []),
+                "trace": validation_result.get("trace", []),
+                "source": "nvidia_orchestrator",
+            }
+            brain.remediations.update(validation_result.get("remediations", {}))
+            brain.final_report = attach_git_remediation_summary(
+                build_nvidia_final_report(validation_result, target_url),
+                target_url=target_url,
+                user_id=user_id,
+                remediations=brain.serialize_remediations(),
+            )
+            brain.state.phase = "analyze"
+            brain.state.status = BrainStatus.COMPLETE
+        else:
+            async for log in brain.stream(
+                user_id=user_id,
+                resolved_scan_id=resolved_scan_id,
+                resolved_session_id=resolved_session_id,
+            ):
+                if not active_scans.get(scan_id, {}).get("active"):
+                    brain.terminate()
+                    break
+                if log.get("phase") == "plan" and brain.state.status == BrainStatus.PAUSED:
+                    brain.resume("HEADLESS_AUTO_RESUME")
+                if log.get("phase") in {"execute", "analyze"}:
+                    try:
+                        persist_scan_state(scan_id, brain, target_url, user_id)
+                    except Exception:
+                        logger.exception("Headless %s-stage persistence failed for %s", log["phase"], scan_id)
+
+    except BrainBoundaryError as error:
+        brain.fail(error.message, phase=error.phase)
+        logger.exception("Headless scan %s failed with guarded error", scan_id)
+    except Exception:
+        brain.fail("Unexpected headless orchestration failure.")
+        logger.exception("Headless scan %s failed unexpectedly", scan_id)
+    finally:
+        try:
+            persist_scan_state(scan_id, brain, target_url, user_id)
+        except Exception:
+            logger.exception("Final headless persistence failed for %s", scan_id)
+            try:
+                from psycopg.types.json import Jsonb
+                resolved_id = uuid.UUID(scan_storage.resolve_record_identifier(scan_id))
+                with scan_storage.get_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "UPDATE public.scans SET status=%s, final_report=%s WHERE id=%s",
+                            (brain.state.status.value, Jsonb(brain.serialize_final_report()), resolved_id),
+                        )
+                        cur.execute(
+                            "UPDATE public.scan_sessions SET status=%s WHERE scan_id=%s",
+                            (brain.state.status.value, resolved_id),
+                        )
+                        conn.commit()
+                logger.info("Fallback status update succeeded for %s", scan_id)
+            except Exception:
+                logger.exception("Fallback status update also failed for %s", scan_id)
+        active_scans.pop(scan_id, None)
+        brain_sessions.pop(scan_id, None)
+
+
 def hydrate_brain_from_record(scan_id: str, record: dict) -> BrainOrchestrator:
     brain = BrainOrchestrator(scan_id=scan_id, target_url=record.get("target_url", ""))
     brain.execution_results = record.get("results") or {"port_scan": None, "header_audit": None, "audit_engine": None}
@@ -498,17 +601,20 @@ async def create_scan(
         raise HTTPException(status_code=503, detail="TARGET REGISTRATION FAILED. HUNT ABORTED.")
 
     result = create_scan_record(normalized_target, user_id=user_id)
+    scan_id = result["data"]["scan_id"]
 
     asyncio.create_task(broadcast_dashboard_update({
         "type": "scan_update",
         "scan": {
-            "id": result["scan_id"],
+            "id": scan_id,
             "target_url": normalized_target,
             "status": "pending",
             "user_id": user_id,
             "created_at": datetime.now(timezone.utc).isoformat(),
         },
     }))
+
+    asyncio.create_task(_run_headless_scan(scan_id, normalized_target, user_id))
 
     return result
 

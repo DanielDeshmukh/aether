@@ -1,33 +1,38 @@
+import { createHmac } from 'node:crypto';
 import { type Page, type BrowserContext } from '@playwright/test';
 
 export const API_BASE = process.env.VITE_API_URL || 'http://localhost:8000';
 export const FRONTEND_BASE = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5173';
+const JWT_SECRET = process.env.AETHER_JWT_SECRET || 'dev_secret_change_in_production';
+
+function signJwt(payload: Record<string, unknown>): string {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url');
+  return `${header}.${body}.${signature}`;
+}
 
 export function generateTestToken(userId: string, email: string): string {
-  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const payload = Buffer.from(JSON.stringify({
+  return signJwt({
     sub: userId,
     email,
     type: 'access',
+    aud: 'authenticated',
     jti: crypto.randomUUID(),
     iat: Math.floor(Date.now() / 1000),
     exp: Math.floor(Date.now() / 1000) + 3600,
-  })).toString('base64url');
-  const signature = Buffer.from('test-signature').toString('base64url');
-  return `${header}.${payload}.${signature}`;
+  });
 }
 
 export function generateTestRefreshToken(userId: string): string {
-  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const payload = Buffer.from(JSON.stringify({
+  return signJwt({
     sub: userId,
     type: 'refresh',
+    aud: 'authenticated',
     jti: crypto.randomUUID(),
     iat: Math.floor(Date.now() / 1000),
     exp: Math.floor(Date.now() / 1000) + 604800,
-  })).toString('base64url');
-  const signature = Buffer.from('test-signature').toString('base64url');
-  return `${header}.${payload}.${signature}`;
+  });
 }
 
 export async function loginWithMockTokens(page: Page, userId: string, email: string) {
@@ -74,9 +79,12 @@ export async function confirmAndExecute(page: Page) {
 }
 
 export async function waitForScanComplete(page: Page, scanId: string, timeoutMs = 90000) {
+  const token = await page.evaluate(() => localStorage.getItem('aether_access_token'));
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const response = await page.request.get(`${API_BASE}/api/v1/scans/${scanId}`);
+    const response = await page.request.get(`${API_BASE}/api/v1/scans/${scanId}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
     if (response.ok()) {
       const scan = await response.json();
       if (scan.status === 'completed' || scan.status === 'failed') {
@@ -89,7 +97,10 @@ export async function waitForScanComplete(page: Page, scanId: string, timeoutMs 
 }
 
 export async function getScanFromApi(page: Page, scanId: string) {
-  const response = await page.request.get(`${API_BASE}/api/v1/scans/${scanId}`);
+  const token = await page.evaluate(() => localStorage.getItem('aether_access_token'));
+  const response = await page.request.get(`${API_BASE}/api/v1/scans/${scanId}`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
   if (!response.ok()) throw new Error(`Failed to fetch scan ${scanId}`);
   return response.json();
 }
@@ -146,6 +157,6 @@ export async function waitForWebSocketMessage(
 export const TEST_TARGET_URL = 'https://babujichaay.com';
 
 export const TEST_USER = {
-  id: 'e2e-test-user-001',
+  id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
   email: 'e2e-test@aether.dev',
 };

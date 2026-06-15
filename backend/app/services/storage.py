@@ -158,6 +158,7 @@ class ScanStorage:
                             self.vulnerabilities_table,
                             self.profiles_table,
                             self.consent_logs_table,
+                            "targets",
                         }
                     )
         except Exception:
@@ -694,6 +695,17 @@ class ScanStorage:
                 cursor.execute(
                     """
                     create index if not exists remediation_history_scan_idx on public.remediation_history (scan_id);
+                    """
+                )
+                cursor.execute(
+                    """
+                    create table if not exists public.targets (
+                        id uuid primary key default gen_random_uuid(),
+                        domain text not null unique,
+                        user_id uuid,
+                        is_verified boolean default false,
+                        created_at timestamptz not null default timezone('utc', now())
+                    );
                     """
                 )
             connection.commit()
