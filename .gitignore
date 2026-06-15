@@ -17,7 +17,21 @@ frontend/dist/
 frontend/test-results/
 dist/
 *.log
+
+# IDE
 .claude/
 .claude-flow/
 .sixth/
-PHASE_COMPLETION_REPORT.md
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Deployment artifacts
+*.pem
+*.key
+

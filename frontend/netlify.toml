@@ -1,9 +1,12 @@
 [build]
+  base = "frontend"
   command = "npm run build"
   publish = "dist"
 
 [build.environment]
   NODE_VERSION = "22"
+  # Set to your Railway backend URL in Netlify UI environment variables
+  # Example: VITE_API_URL=https://your-app.up.railway.app
   VITE_API_URL = ""
 
 [[redirects]]

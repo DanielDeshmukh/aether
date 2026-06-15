@@ -8,7 +8,7 @@ nixPkgs = ["chromium", "fontconfig", "libnss3", "libatk1.0-0", "libatk-bridge2.0
 cmds = ["pip install -r backend/requirements.txt", "playwright install chromium"]
 
 [phases.run]
- cmds = ["cd backend && gunicorn app.api.main:app -k uvicorn.workers.UvicornWorker -c ../deploy/gunicorn.conf.py"]
+cmds = ["cd backend && alembic upgrade head && gunicorn app.api.main:app -k uvicorn.workers.UvicornWorker --timeout 120"]
 
 [deploy]
-start = "cd backend && gunicorn app.api.main:app -k uvicorn.workers.UvicornWorker -c ../deploy/gunicorn.conf.py"
+start = "cd backend && alembic upgrade head && gunicorn app.api.main:app -k uvicorn.workers.UvicornWorker --timeout 120"

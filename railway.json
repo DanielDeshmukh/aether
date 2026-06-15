@@ -5,7 +5,7 @@
     "dockerfilePath": "backend/Dockerfile"
   },
   "deploy": {
-    "startCommand": "cd /app && gunicorn app.api.main:app -k uvicorn.workers.UvicornWorker -c ../deploy/gunicorn.conf.py",
+    "startCommand": "/app/start.sh",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",
