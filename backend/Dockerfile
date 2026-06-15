@@ -7,7 +7,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt ./requirements.txt
+COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir --prefix=/install -r requirements.txt
 
@@ -51,12 +51,12 @@ RUN apt-get update \
 COPY --from=builder /install /usr/local
 
 # Copy application code
-COPY app ./app
-COPY main.py ./main.py
-COPY start.sh ./start.sh
-COPY alembic.ini ./alembic.ini
-COPY alembic ./alembic
-COPY .env.example ./.env.example
+COPY backend/app ./app
+COPY backend/main.py ./main.py
+COPY backend/start.sh ./start.sh
+COPY backend/alembic.ini ./alembic.ini
+COPY backend/alembic ./alembic
+COPY backend/.env.example ./.env.example
 
 # Install Playwright browsers (Chromium only)
 RUN playwright install chromium

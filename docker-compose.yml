@@ -21,8 +21,8 @@ services:
 
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: aether-backend
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-aether}:${POSTGRES_PASSWORD:-aether_dev_password}@postgres:5432/${POSTGRES_DB:-aether}
