@@ -73,6 +73,7 @@ jobs:
       AETHER_JWT_SECRET: test_secret_for_ci_only
       ENVIRONMENT: development
       PORT: 8000
+      QUOTA_FREE_LIMIT: 50
 
     steps:
       - uses: actions/checkout@v4
