@@ -5,8 +5,8 @@
 
 [build.environment]
   NODE_VERSION = "22"
-  # Set to your Railway backend URL in Netlify UI environment variables
-  # Example: VITE_API_URL=https://your-app.up.railway.app
+  # Set to your Fly.io backend URL in Netlify UI environment variables
+  # Example: VITE_API_URL=https://your-app.fly.dev
   VITE_API_URL = ""
 
 [[redirects]]
