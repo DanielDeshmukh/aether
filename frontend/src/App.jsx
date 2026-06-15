@@ -14,6 +14,8 @@ import AuthCallback from './pages/AuthCallback';
 import Dashboard from './pages/Dashboard';
 import ScanDetail from './pages/ScanDetail';
 import Settings from './pages/Settings';
+import Security from './pages/Security';
+import Legal from './pages/Legal';
 import { useDocumentTitle } from './lib/useDocumentTitle';
 
 
@@ -50,6 +52,8 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/dashboard/:scanId" element={<ScanDetail />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/security" element={<Security />} />
+          <Route path="/legal" element={<Legal />} />
         </Routes>
       </main>
     </div>

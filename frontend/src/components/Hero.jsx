@@ -24,9 +24,9 @@ const Hero = () => {
                 JOIN THE VANGUARD
               </button>
                </Link>
-              <button className="w-full sm:w-auto border border-lambo-white text-lambo-white px-6 md:px-12 py-3 md:py-4 text-xs font-black tracking-[0.2em] transition-colors hover:bg-lambo-white/10 uppercase">
+              <a href="#capabilities" className="w-full sm:w-auto border border-lambo-white text-lambo-white px-6 md:px-12 py-3 md:py-4 text-xs font-black tracking-[0.2em] transition-colors hover:bg-lambo-white/10 uppercase text-center inline-block">
                 Explore Feed
-              </button>
+              </a>
             </div>
           </div>
           <div className="w-full lg:w-[45%] relative group p-4 bg-lambo-charcoal/5">
