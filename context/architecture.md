@@ -66,6 +66,6 @@
 
 ## Current Status Notes
 
-- The architecture is mid-transition: there is both a modern `ScanStorage` path and an older `AetherStorage` plus `aether_routes.py` path still present.
-- `backend/main.py` and `backend/app/api/deps.py` currently contain unresolved merge markers, so the repo state is ahead of the context templates but not fully cleaned.
+- The legacy `AetherStorage` and `aether_routes.py` have been fully removed. All storage now goes through the modern `ScanStorage` class in `backend/app/services/storage.py`.
+- `backend/app/api/main.py` and `backend/app/api/deps.py` are clean with no merge markers.
 - The frontend exposes a pull-request remediation action, but the remediation WebSocket handler currently only handles `generate_fix`, so Git PR support is not fully wired end to end.
