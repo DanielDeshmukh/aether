@@ -135,7 +135,7 @@ class InitialPlan(BaseModel):
 
 class FinalVerdict(BaseModel):
     threat_level: Literal["low", "medium", "high", "critical"]
-    risk_impact: str = Field(min_length=20, max_length=420)
+    risk_impact: str = Field(min_length=20, max_length=1000)
     remediation_steps: List[str] = Field(min_length=2, max_length=4)
 
 
@@ -206,7 +206,7 @@ class PentestAgent:
     def __init__(self) -> None:
         self.api_key = os.getenv("GEMINI_API_KEY", "").strip()
         self.model_name = "gemini-2.5-flash"
-        self.request_timeout_seconds = 20
+        self.request_timeout_seconds = 45
 
     def _has_usable_api_key(self) -> bool:
         return bool(self.api_key) and not self.api_key.lower().startswith("your_")
@@ -441,7 +441,7 @@ class BrainOrchestrator:
             try:
                 self.initial_plan = await asyncio.wait_for(
                     asyncio.to_thread(self.agent.generate_initial_plan, self.state.target_url),
-                    timeout=60,
+                    timeout=120,
                 )
             except asyncio.TimeoutError as error:
                 raise BrainBoundaryError(
