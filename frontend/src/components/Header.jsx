@@ -64,7 +64,7 @@ const Header = () => {
       <button
         type="button"
         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        className="flex flex-col gap-1.5 md:hidden"
+        className="flex flex-col gap-1.5 p-3 md:hidden"
         aria-label="Toggle menu"
       >
         <span className={`h-0.5 w-6 bg-lambo-gold transition-transform ${isMobileMenuOpen ? 'rotate-45 translate-y-2' : ''}`} />

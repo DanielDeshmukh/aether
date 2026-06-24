@@ -73,13 +73,13 @@ const ScanChart = ({ scans }) => {
                   style={{ height: `${Math.max(0, height - completedHeight - failedHeight)}%` }}
                 />
               </div>
-              <span className="text-[8px] tracking-[0.15em] text-lambo-ash">{data.date}</span>
+              <span className="text-[9px] sm:text-[10px] tracking-[0.15em] text-lambo-ash">{data.date}</span>
             </div>
           );
         })}
       </div>
       
-      <div className="mt-4 flex items-center gap-4 text-[9px] tracking-[0.15em]">
+      <div className="mt-4 flex flex-wrap items-center gap-3 sm:gap-4 text-[9px] sm:text-[10px] tracking-[0.15em]">
         <div className="flex items-center gap-2">
           <div className="h-2 w-2 bg-green-500/30 rounded" />
           <span className="text-lambo-ash">Completed</span>
