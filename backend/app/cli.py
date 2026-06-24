@@ -3,6 +3,7 @@
 import os
 import sys
 import signal
+import shutil
 import subprocess
 import time
 import json
@@ -300,7 +301,11 @@ def run(backend_port: int, frontend_port: int, no_frontend: bool, no_env_check: 
             frontend_env = os.environ.copy()
             frontend_env["VITE_API_URL"] = f"http://localhost:{backend_port}"
 
-            frontend_cmd = [str(Path(r"C:\Program Files\nodejs\npm.cmd")), "run", "dev", "--", "--port", str(frontend_port)]
+            npm_path = shutil.which("npm")
+            if not npm_path:
+                log_warn("npm not found in PATH. Skipping frontend.")
+                return
+            frontend_cmd = [npm_path, "run", "dev", "--", "--port", str(frontend_port)]
 
             frontend_proc = subprocess.Popen(
                 frontend_cmd,
@@ -399,9 +404,14 @@ def build(clean: bool):
             log_info("Cleaned node_modules/")
 
     # Install dependencies
+    npm_path = shutil.which("npm")
+    if not npm_path:
+        log_error("npm not found in PATH. Cannot build frontend.")
+        sys.exit(1)
+
     log_info("Installing frontend dependencies...")
     result = subprocess.run(
-        [str(Path(r"C:\Program Files\nodejs\npm.cmd")), "install"],
+        [npm_path, "install"],
         cwd=str(frontend_dir),
         capture_output=True,
         text=True,
@@ -414,7 +424,7 @@ def build(clean: bool):
     # Build
     log_info("Building frontend...")
     result = subprocess.run(
-        [str(Path(r"C:\Program Files\nodejs\npm.cmd")), "run", "build"],
+        [npm_path, "run", "build"],
         cwd=str(frontend_dir),
         capture_output=True,
         text=True,
