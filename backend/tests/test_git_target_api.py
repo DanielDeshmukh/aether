@@ -15,7 +15,20 @@ from app.api import main as api_main
 from app.services.auth import create_access_token
 from app.services.storage import ScanStorage
 
-_HAS_DB = ScanStorage().database_configured()
+def _has_targets_table() -> bool:
+    storage = ScanStorage()
+    if not storage.database_configured():
+        return False
+    try:
+        with storage.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM information_schema.tables WHERE table_name='targets' LIMIT 1")
+                return cur.fetchone() is not None
+    except Exception:
+        return False
+
+
+_HAS_DB = _has_targets_table()
 
 
 def _needs_db(test_func):
