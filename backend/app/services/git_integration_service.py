@@ -61,7 +61,7 @@ class GitProvider(ABC):
         evidence_snippet = remediation_payload.get("evidence_snippet") or "No evidence snippet captured."
         target_url = remediation_payload.get("target_url") or "Unknown target"
         vulnerable_code_analysis = remediation_payload.get("vulnerable_code_analysis") or "No vulnerable code analysis supplied."
-        secure_refactor = remediation_payload.get("secure_refactor") or "No secure refactor supplied."
+        secure_refactor = remediation_payload.get("secure_refactor") or remediation_payload.get("code") or "No secure refactor supplied."
         summary = remediation_payload.get("summary") or "No summary supplied."
 
         return (

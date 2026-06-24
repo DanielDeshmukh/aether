@@ -1335,6 +1335,65 @@ async def email_scan_report(
     return standard_response(data={"email": payload.email}, message="Report sent successfully")
 
 
+class GitTargetRequest(BaseModel):
+    target_id: str
+    git_provider: str = Field(..., pattern="^(github|gitlab)$")
+    access_token: str = Field(..., min_length=1)
+    repository: str = Field(..., min_length=1)
+    project_id: str | None = None
+    default_branch: str | None = None
+    base_branch: str | None = None
+    api_base_url: str | None = None
+    repo_web_url: str | None = None
+
+
+@app.get("/api/v1/git-targets")
+async def list_git_targets(request: Request):
+    user_id = get_user_id_from_request(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="AUTHENTICATION REQUIRED.")
+    targets = scan_storage.list_git_targets(user_id=user_id)
+    return standard_response(data={"targets": targets})
+
+
+@app.post("/api/v1/git-targets")
+async def create_or_update_git_target(payload: GitTargetRequest, request: Request):
+    user_id = get_user_id_from_request(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="AUTHENTICATION REQUIRED.")
+
+    target_record = scan_storage.fetch_git_target(target_id=payload.target_id, user_id=user_id)
+    if not target_record:
+        raise HTTPException(status_code=404, detail="TARGET NOT FOUND OR ACCESS DENIED.")
+
+    success = scan_storage.upsert_git_target(
+        target_id=payload.target_id,
+        user_id=user_id,
+        git_provider=payload.git_provider,
+        access_token=payload.access_token,
+        repository=payload.repository,
+        project_id=payload.project_id,
+        default_branch=payload.default_branch,
+        base_branch=payload.base_branch,
+        api_base_url=payload.api_base_url,
+        repo_web_url=payload.repo_web_url,
+    )
+    if not success:
+        raise HTTPException(status_code=500, detail="FAILED TO UPDATE GIT TARGET.")
+    return standard_response(data={"target_id": payload.target_id}, message="Git target updated successfully")
+
+
+@app.delete("/api/v1/git-targets/{target_id}")
+async def delete_git_target(target_id: str, request: Request):
+    user_id = get_user_id_from_request(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="AUTHENTICATION REQUIRED.")
+    success = scan_storage.delete_git_target(target_id=target_id, user_id=user_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="TARGET NOT FOUND OR ACCESS DENIED.")
+    return standard_response(message="Git target deleted successfully")
+
+
 @app.websocket("/ws/remediation/{scan_id}")
 async def websocket_remediation(websocket: WebSocket, scan_id: str):
     await websocket.accept()
