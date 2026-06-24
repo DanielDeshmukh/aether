@@ -3,8 +3,6 @@ import { apiRequest } from '../lib/apiClient';
 
 const GitIntegration = () => {
   const [targets, setTargets] = useState([]);
-  const [scans, setScans] = useState([]);
-  const [selectedScan, setSelectedScan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -23,28 +21,23 @@ const GitIntegration = () => {
   });
 
   useEffect(() => {
-    loadData();
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const targetsRes = await apiRequest('/api/v1/git-targets');
+        const targetsData = await targetsRes.json();
+        if (!cancelled) setTargets(targetsData?.data?.targets || []);
+      } catch {
+        if (!cancelled) setError('Failed to load data.');
+      }
+      if (!cancelled) setLoading(false);
+    };
+    load();
+    return () => { cancelled = true; };
   }, []);
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [targetsRes, scansRes] = await Promise.all([
-        apiRequest('/api/v1/git-targets'),
-        apiRequest('/api/v1/scans'),
-      ]);
-      const targetsData = await targetsRes.json();
-      const scansData = await scansRes.json();
-      setTargets(targetsData?.data?.targets || []);
-      setScans(scansData?.data?.scans || []);
-    } catch (err) {
-      setError('Failed to load data.');
-    }
-    setLoading(false);
-  };
-
   const handleScanSelect = (scan) => {
-    setSelectedScan(scan);
     setForm({
       target_id: scan.target_id || '',
       git_provider: 'github',
@@ -85,7 +78,9 @@ const GitIntegration = () => {
         body: JSON.stringify(form),
       });
       setMessage('Git integration configured successfully.');
-      loadData();
+      const targetsRes = await apiRequest('/api/v1/git-targets');
+      const targetsData = await targetsRes.json();
+      setTargets(targetsData?.data?.targets || []);
     } catch (err) {
       setError(err.message || 'Failed to save git configuration.');
     }
@@ -97,7 +92,9 @@ const GitIntegration = () => {
     try {
       await apiRequest(`/api/v1/git-targets/${targetId}`, { method: 'DELETE' });
       setMessage('Git integration removed.');
-      loadData();
+      const targetsRes = await apiRequest('/api/v1/git-targets');
+      const targetsData = await targetsRes.json();
+      setTargets(targetsData?.data?.targets || []);
     } catch {
       setError('Failed to remove git integration.');
     }
