@@ -1348,20 +1348,13 @@ class GitTargetRequest(BaseModel):
 
 
 @app.get("/api/v1/git-targets")
-async def list_git_targets(request: Request):
-    user_id = get_user_id_from_request(request)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="AUTHENTICATION REQUIRED.")
+async def list_git_targets(user_id: str = Depends(get_current_user)):
     targets = scan_storage.list_git_targets(user_id=user_id)
     return standard_response(data={"targets": targets})
 
 
 @app.post("/api/v1/git-targets")
-async def create_or_update_git_target(payload: GitTargetRequest, request: Request):
-    user_id = get_user_id_from_request(request)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="AUTHENTICATION REQUIRED.")
-
+async def create_or_update_git_target(payload: GitTargetRequest, user_id: str = Depends(get_current_user)):
     target_record = scan_storage.fetch_git_target(target_id=payload.target_id, user_id=user_id)
     if not target_record:
         raise HTTPException(status_code=404, detail="TARGET NOT FOUND OR ACCESS DENIED.")
@@ -1384,10 +1377,7 @@ async def create_or_update_git_target(payload: GitTargetRequest, request: Reques
 
 
 @app.delete("/api/v1/git-targets/{target_id}")
-async def delete_git_target(target_id: str, request: Request):
-    user_id = get_user_id_from_request(request)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="AUTHENTICATION REQUIRED.")
+async def delete_git_target(target_id: str, user_id: str = Depends(get_current_user)):
     success = scan_storage.delete_git_target(target_id=target_id, user_id=user_id)
     if not success:
         raise HTTPException(status_code=404, detail="TARGET NOT FOUND OR ACCESS DENIED.")
