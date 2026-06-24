@@ -3,7 +3,7 @@ import sys
 import uuid
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from fastapi.testclient import TestClient
 
@@ -13,6 +13,18 @@ if str(BACKEND_DIR) not in sys.path:
 
 from app.api import main as api_main
 from app.services.auth import create_access_token
+from app.services.storage import ScanStorage
+
+_HAS_DB = ScanStorage().database_configured()
+
+
+def _needs_db(test_func):
+    """Decorator to skip test when PostgreSQL is not available."""
+    @unittest.skipUnless(_HAS_DB, "PostgreSQL not available — skipping integration test")
+    def wrapper(self, *args, **kwargs):
+        return test_func(self, *args, **kwargs)
+    wrapper.__name__ = test_func.__name__
+    return wrapper
 
 
 class TestGitTargetEndpoints(unittest.TestCase):
@@ -50,6 +62,7 @@ class TestGitTargetEndpoints(unittest.TestCase):
         resp = self.client.get("/api/v1/git-targets")
         self.assertEqual(resp.status_code, 401)
 
+    @_needs_db
     def test_create_git_target(self) -> None:
         target_id = self._create_target_via_storage("example.com")
         resp = self.client.post(
@@ -68,6 +81,7 @@ class TestGitTargetEndpoints(unittest.TestCase):
         self.assertIn("data", data)
         self.assertEqual(data["data"]["target_id"], target_id)
 
+    @_needs_db
     def test_create_git_target_invalid_provider(self) -> None:
         target_id = self._create_target_via_storage("example2.com")
         resp = self.client.post(
@@ -96,6 +110,7 @@ class TestGitTargetEndpoints(unittest.TestCase):
         )
         self.assertEqual(resp.status_code, 404)
 
+    @_needs_db
     def test_list_git_targets_after_create(self) -> None:
         target_id = self._create_target_via_storage("listed.com")
         self.client.post(
@@ -116,6 +131,7 @@ class TestGitTargetEndpoints(unittest.TestCase):
         git_targets = [t for t in targets if t.get("git_provider") == "gitlab"]
         self.assertTrue(len(git_targets) >= 1)
 
+    @_needs_db
     def test_delete_git_target(self) -> None:
         target_id = self._create_target_via_storage("deleteme.com")
         self.client.post(
@@ -136,6 +152,7 @@ class TestGitTargetEndpoints(unittest.TestCase):
         resp = self.client.delete(f"/api/v1/git-targets/{fake_id}", headers=self._auth_headers())
         self.assertEqual(resp.status_code, 404)
 
+    @_needs_db
     def test_update_git_target(self) -> None:
         target_id = self._create_target_via_storage("update.com")
         self.client.post(
