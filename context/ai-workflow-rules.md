@@ -17,7 +17,7 @@ Split an implementation step if it combines:
 
 - React route/UI work and FastAPI/WebSocket contract changes
 - Storage schema changes and orchestration changes
-- Legacy `AetherStorage` path cleanup and modern `ScanStorage` path changes
+- Legacy `AetherStorage` path cleanup (completed) and modern `ScanStorage` path changes
 - Marketing-page styling and dashboard/debrief functionality
 - Product behavior that is not already grounded in `MISSION_GOALS.md` or the existing code
 
@@ -41,7 +41,6 @@ Do not modify the following unless the task explicitly calls for it:
 
 Use extra caution with:
 
-- `backend/main.py` and `backend/app/api/deps.py` because the current repo state shows unresolved merge markers
 - persistence and verification code because these define cross-tenant and legal-safety boundaries
 
 ## Keeping Docs In Sync
