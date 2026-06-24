@@ -198,12 +198,12 @@ const Dashboard = () => {
         isReconnecting={wsReconnecting} 
         onRetry={handleRetryConnection}
       />
-      <main className="relative overflow-hidden px-5 pb-16 pt-28 md:px-10">
+      <main className="relative overflow-hidden px-5 pb-16 pt-24 md:px-10 md:pt-28">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,193,7,0.05),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_22%)]" />
         <div className="absolute left-0 top-0 h-full w-full bg-[linear-gradient(135deg,transparent_0%,transparent_48%,rgba(255,193,7,0.02)_48%,rgba(255,193,7,0.02)_49%,transparent_49%,transparent_100%)] opacity-30" />
 
         <section className="relative mx-auto max-w-7xl">
-          <div className="chamfer-panel border border-lambo-gold/20 bg-[#0d0d0d] p-8 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] md:p-10">
+          <div className="chamfer-panel border border-lambo-gold/20 bg-[#0d0d0d] p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] sm:p-6 md:p-8 lg:p-10">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
               <div className="max-w-2xl">
                 <p className="text-[10px] font-bold tracking-[0.45em] text-lambo-gold">// Phase 5 Dashboard</p>

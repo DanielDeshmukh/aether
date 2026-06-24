@@ -62,8 +62,8 @@ const SidebarTelemetry = () => {
             </div>
 
             {selectedScan && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md">
-                    <div className="w-full max-w-md border border-white/10 bg-[#0D0D0D] p-8">
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-md">
+                    <div className="w-full max-w-md border border-white/10 bg-[#0D0D0D] p-4 sm:p-6 md:p-8 mx-4">
                         <p className="text-[10px] font-mono text-[#FFC107] tracking-widest">// PDF_GENERATOR</p>
                         <h2 className="mt-4 text-2xl font-black text-white uppercase">Download Report</h2>
                         <div className="mt-6 border-l-2 border-[#FFC107] pl-4 py-1 text-xs text-gray-400">

@@ -139,7 +139,7 @@ const ScanningConsole = ({ scanSession, className = '' }) => {
                             // Aether_Engine_Core
                         </span>
                     </div>
-                    <div className="text-[9px] text-lambo-ash tracking-widest flex items-center gap-2">
+                    <div className="text-[9px] sm:text-[10px] text-lambo-ash tracking-widest flex flex-wrap items-center gap-2">
                         ID: <span className="text-lambo-gold">{scanSession?.scan_id || 'Standby'}</span>
                         <span className="text-lambo-charcoal">|</span>
                         Mode: <span className="text-lambo-gold">{statusLabels[status]}</span>
@@ -147,7 +147,7 @@ const ScanningConsole = ({ scanSession, className = '' }) => {
                 </div>
 
                 {brainState?.requires_operator && (
-                    <div className="border-b border-white/10 bg-lambo-gold/10 px-4 py-3 flex items-center justify-between gap-4">
+                    <div className="border-b border-white/10 bg-lambo-gold/10 px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <p className="text-[9px] text-lambo-gold uppercase tracking-[0.35em]">// Plan Hold</p>
                             <p className="text-[10px] text-lambo-white tracking-[0.18em]">
@@ -156,7 +156,7 @@ const ScanningConsole = ({ scanSession, className = '' }) => {
                         </div>
                         <button
                             onClick={() => sendPlanSignal('resume', 'Operator cleared the plan window.')}
-                            className="border border-lambo-gold bg-lambo-gold px-4 py-2 text-[10px] font-bold tracking-[0.15em] text-black transition-colors hover:bg-[#917300]"
+                            className="border border-lambo-gold bg-lambo-gold px-4 py-3 text-[10px] sm:text-xs font-bold tracking-[0.15em] text-black transition-colors hover:bg-[#917300]"
                         >
                             Resume Reasoning
                         </button>
@@ -178,9 +178,9 @@ const ScanningConsole = ({ scanSession, className = '' }) => {
                         const logType = (log.type || 'thought').toLowerCase();
                         const capitalizedType = logType.charAt(0).toUpperCase() + logType.slice(1);
                         return (
-                            <div key={i} className="flex gap-4 text-[11px] leading-relaxed animate-in fade-in slide-in-from-left-2 duration-300">
+                            <div key={i} className="flex flex-wrap gap-2 sm:gap-4 text-[11px] leading-relaxed animate-in fade-in slide-in-from-left-2 duration-300">
                                 <span className="text-lambo-ash/40">[{new Date().toLocaleTimeString([], { hour12: false })}]</span>
-                                <span className={`font-bold tracking-tight w-20 ${
+                                <span className={`font-bold tracking-tight w-16 sm:w-20 ${
                                     log.type === 'error'
                                         ? 'text-red-600'
                                         : 'text-lambo-gold'
@@ -211,7 +211,7 @@ const ScanningConsole = ({ scanSession, className = '' }) => {
                                         </div>
                                     )}
                                     {log.phase && (
-                                        <span className={`inline-block border px-2 py-1 text-[8px] tracking-[0.2em] ${
+                                        <span className={`inline-block border px-2 py-1 text-[9px] sm:text-[10px] tracking-[0.2em] ${
                                             log.type === 'error'
                                                 ? 'border-white/10 text-red-400'
                                                 : 'border-white/10 text-lambo-gold'
@@ -262,7 +262,7 @@ const ScanningConsole = ({ scanSession, className = '' }) => {
                         <button
                             onClick={handleKillSwitch}
                             disabled={status === 'terminated' || !scanSession?.scan_id}
-                            className={`px-6 py-2 text-[10px] font-bold tracking-[0.15em] transition-colors border ${
+                            className={`px-6 py-3 text-[10px] sm:text-xs font-bold tracking-[0.15em] transition-colors border ${
                                 status === 'terminated' || !scanSession?.scan_id
                                     ? 'border-lambo-charcoal text-lambo-ash opacity-50 cursor-not-allowed'
                                     : 'border-red-600/50 text-red-500 hover:bg-red-600 hover:text-white'

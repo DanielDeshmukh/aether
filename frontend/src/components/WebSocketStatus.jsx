@@ -16,7 +16,7 @@ const WebSocketStatus = ({ isConnected, isReconnecting, onRetry }) => {
           {!isReconnecting && onRetry && (
             <button
               onClick={onRetry}
-              className="chamfer-button border border-yellow-500/30 bg-yellow-500/20 px-2 py-1 text-[9px] font-bold tracking-[0.15em] text-yellow-400 hover:bg-yellow-500/30 transition-colors"
+              className="chamfer-button border border-yellow-500/30 bg-yellow-500/20 px-3 py-2 text-[9px] sm:text-[10px] font-bold tracking-[0.15em] text-yellow-400 hover:bg-yellow-500/30 transition-colors"
             >
               RETRY
             </button>

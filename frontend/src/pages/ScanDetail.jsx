@@ -287,18 +287,18 @@ const ScanDetail = () => {
   return (
     <div className="min-h-screen bg-[#050505] font-lambo text-lambo-white">
       <Header />
-      <main className="relative overflow-hidden px-5 pb-16 pt-28 md:px-10">
+      <main className="relative overflow-hidden px-5 pb-16 pt-24 md:px-10 md:pt-28">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,192,0,0.05),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_22%)]" />
 
         <section className="relative mx-auto max-w-7xl space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-bold tracking-[0.4em] text-lambo-gold">// Mission Debrief</p>
-                <h1 className="mt-3 break-all text-3xl font-black tracking-[-0.03em] text-lambo-white md:text-5xl">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold tracking-[0.4em] text-lambo-gold sm:text-xs">// Mission Debrief</p>
+                <h1 className="mt-3 break-all text-xl font-black tracking-[-0.03em] text-lambo-white sm:text-3xl md:text-5xl">
                   {scan?.target_url ?? 'Loading Scan'}
                 </h1>
               </div>
-              <div className="flex items-center gap-3 flex-wrap justify-end">
+              <div className="flex items-center gap-3 flex-wrap justify-start md:justify-end">
                 <button type="button" onClick={handleDownloadPdf}
                   className="chamfer-button border border-lambo-gold/30 bg-lambo-gold/10 px-4 py-3 text-[10px] font-bold tracking-[0.2em] text-lambo-gold transition-colors hover:bg-lambo-gold/20">
                   Download PDF
@@ -335,13 +335,13 @@ const ScanDetail = () => {
           )}
 
           {isLoading ? (
-            <div className="chamfer-panel border border-white/10 bg-white/[0.02] p-8 text-[10px] tracking-[0.3em] text-lambo-ash">
+            <div className="chamfer-panel border border-white/10 bg-white/[0.02] p-4 sm:p-6 md:p-8 text-[10px] tracking-[0.3em] text-lambo-ash">
               Loading debrief...
             </div>
           ) : scan ? (
             <>
-              <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-                <div className="chamfer-panel border border-lambo-gold/20 bg-[#0d0d0d] p-8">
+              <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-[1.2fr_0.8fr]">
+                <div className="chamfer-panel border border-lambo-gold/20 bg-[#0d0d0d] p-4 sm:p-6 md:p-8">
                   <p className="text-[10px] font-bold tracking-[0.42em] text-lambo-gold">// Risk Impact</p>
                   <p className="mt-5 text-lg font-bold tracking-tight text-lambo-white md:text-xl">
                     {finalReport.risk_impact ?? 'Final synthesis pending.'}
@@ -361,7 +361,7 @@ const ScanDetail = () => {
                   )}
                 </div>
 
-                <div className="chamfer-panel border border-white/10 bg-white/5 p-8">
+                <div className="chamfer-panel border border-white/10 bg-white/5 p-4 sm:p-6 md:p-8">
                   <p className="text-[10px] font-bold tracking-[0.42em] text-lambo-gold">// Remediation Steps</p>
                   <div className="mt-5 space-y-4">
                     {(finalReport.remediation_steps ?? []).map((step, index) => (
@@ -374,8 +374,8 @@ const ScanDetail = () => {
                 </div>
               </section>
 
-              <section className="grid gap-6 xl:grid-cols-2">
-                <div className="chamfer-panel border border-white/10 bg-white/5 p-8">
+              <section className="grid gap-6 md:grid-cols-2">
+                <div className="chamfer-panel border border-white/10 bg-white/5 p-4 sm:p-6 md:p-8">
                   <div className="flex items-center justify-between mb-5">
                     <p className="text-[10px] font-bold tracking-[0.42em] text-lambo-gold">// Vulnerabilities & Remediations</p>
                   </div>
@@ -512,7 +512,7 @@ const ScanDetail = () => {
                   </div>
                 </div>
 
-                <div className="chamfer-panel border border-white/10 bg-white/5 p-8">
+                <div className="chamfer-panel border border-white/10 bg-white/5 p-4 sm:p-6 md:p-8">
                   <p className="text-[10px] font-bold tracking-[0.42em] text-lambo-gold">// Gemini Strategy Trace</p>
                   <div className="mt-5 space-y-4">
                     {planSteps.map((step, index) => (
@@ -526,7 +526,7 @@ const ScanDetail = () => {
               </section>
             </>
           ) : (
-            <div className="chamfer-panel border border-white/10 bg-white/[0.02] p-8 text-[10px] uppercase tracking-[0.3em] text-lambo-ash">
+            <div className="chamfer-panel border border-white/10 bg-white/[0.02] p-4 sm:p-6 md:p-8 text-[10px] uppercase tracking-[0.3em] text-lambo-ash">
               Scan not found.
             </div>
           )}
