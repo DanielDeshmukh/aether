@@ -704,7 +704,16 @@ class ScanStorage:
                         domain text not null unique,
                         user_id uuid,
                         is_verified boolean default false,
-                        created_at timestamptz not null default timezone('utc', now())
+                        git_provider text,
+                        access_token text,
+                        repository text,
+                        project_id text,
+                        default_branch text,
+                        base_branch text,
+                        api_base_url text,
+                        repo_web_url text,
+                        created_at timestamptz not null default timezone('utc', now()),
+                        updated_at timestamptz
                     );
                     """
                 )
@@ -1583,6 +1592,78 @@ class ScanStorage:
                     return cursor.rowcount > 0
         except Exception as error:
             self._logger.error("Failed to mark target verified for domain=%s: %s", domain, str(error))
+            return False
+
+    def upsert_git_target(
+        self,
+        target_id: str,
+        user_id: str,
+        git_provider: str,
+        access_token: str,
+        repository: str,
+        project_id: str | None = None,
+        default_branch: str | None = None,
+        base_branch: str | None = None,
+        api_base_url: str | None = None,
+        repo_web_url: str | None = None,
+    ) -> bool:
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        """UPDATE targets SET
+                            git_provider = %s,
+                            access_token = %s,
+                            repository = %s,
+                            project_id = %s,
+                            default_branch = %s,
+                            base_branch = %s,
+                            api_base_url = %s,
+                            repo_web_url = %s,
+                            updated_at = timezone('utc', now())
+                         WHERE id = %s AND user_id = %s""",
+                        (
+                            git_provider,
+                            access_token,
+                            repository,
+                            project_id,
+                            default_branch,
+                            base_branch,
+                            api_base_url,
+                            repo_web_url,
+                            target_id,
+                            user_id,
+                        ),
+                    )
+                    return cursor.rowcount > 0
+        except Exception as error:
+            self._logger.error("Failed to upsert git target %s: %s", target_id, str(error))
+            return False
+
+    def list_git_targets(self, user_id: str) -> list[Dict[str, Any]]:
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(row_factory=psycopg.rows.dict_row) as cursor:
+                    cursor.execute(
+                        "SELECT id, domain, git_provider, repository, project_id, default_branch, base_branch, api_base_url, repo_web_url, is_verified, created_at FROM targets WHERE user_id = %s AND git_provider IS NOT NULL ORDER BY created_at DESC",
+                        (user_id,),
+                    )
+                    return cursor.fetchall()
+        except Exception as error:
+            self._logger.error("Failed to list git targets for user %s: %s", user_id, str(error))
+            return []
+
+    def delete_git_target(self, target_id: str, user_id: str) -> bool:
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        "UPDATE targets SET git_provider = NULL, access_token = NULL, repository = NULL, project_id = NULL, default_branch = NULL, base_branch = NULL, api_base_url = NULL, repo_web_url = NULL, updated_at = timezone('utc', now()) WHERE id = %s AND user_id = %s",
+                        (target_id, user_id),
+                    )
+                    return cursor.rowcount > 0
+        except Exception as error:
+            self._logger.error("Failed to delete git target %s: %s", target_id, str(error))
             return False
 
     def revoke_token(self, token_jti: str, user_id: str, expires_at: datetime) -> bool:

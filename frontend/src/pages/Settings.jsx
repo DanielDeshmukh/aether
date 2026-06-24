@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
+import GitIntegration from '../components/GitIntegration';
 import { auth } from '../lib/auth';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 import { apiRequest } from '../lib/apiClient';
@@ -122,6 +123,8 @@ const Settings = () => {
               {isSaving ? 'Saving...' : 'Save Changes'}
             </button>
           </form>
+
+          <GitIntegration />
 
           <div className="chamfer-panel border border-white/10 bg-[#0d0d0d] p-8 flex flex-col gap-4 sm:flex-row sm:justify-between">
             <button type="button" onClick={handleSignOut}
