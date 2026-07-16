@@ -316,6 +316,17 @@ async def delete_account(request: Request):
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+    # Revoke the current access token before deletion
+    jti = data.get("jti")
+    exp = data.get("exp")
+    if jti and exp:
+        from datetime import datetime, timezone
+        expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
+        try:
+            storage.revoke_token(jti, user_id, expires_at)
+        except Exception:
+            logger.warning("Failed to revoke access token during account deletion for user %s", user_id)
+
     deleted = storage.delete_user_account(user_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="User not found")
