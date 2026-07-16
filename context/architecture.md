@@ -10,7 +10,7 @@
 | Backend framework | FastAPI + WebSockets | Scan APIs, live streaming, report download, remediation socket |
 | Persistence | PostgreSQL via `psycopg` with direct SQL | Stores scans, sessions, findings, profiles, consent logs, target verification data |
 | Browser automation | Playwright | Tech stack recon, validation lanes, PDF generation |
-| AI orchestration | Google GenAI plus NVIDIA-hosted OpenAI-compatible models | Initial planning, final verdicts, remediation generation, optional validation orchestration |
+| AI orchestration | NVIDIA NIM via OpenAI-compatible API | Initial planning (nemotron-3-super-120b), final verdicts, remediation generation (nemotron-super-49b-v1.5), content safety (nemotron-3-nano), OWASP validation (nemotron-3-super-120b) |
 | Network tooling | `httpx`, `requests`, custom validators | Safety checks, preflight requests, verification, service integrations |
 
 ## System Boundaries
