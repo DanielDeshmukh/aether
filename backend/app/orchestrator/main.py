@@ -408,7 +408,7 @@ async def api_healthcheck():
         "active_scans": len(active_scans),
         "brain_sessions": len(brain_sessions),
         "auth_configured": bool(os.getenv("AETHER_JWT_SECRET")),
-        "gemini_configured": bool(os.getenv("GEMINI_API_KEY")),
+        "nvidia_configured": bool(os.getenv("NVIDIA_API_KEY")),
         "database_configured": scan_storage.database_configured(),
         "scan_persistence_ready": scan_storage.database_configured(),
         "plan_persistence_supported": scan_storage.supports_plan_persistence() if scan_storage.database_configured() else False,

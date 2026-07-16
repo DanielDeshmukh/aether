@@ -812,7 +812,7 @@ def info():
         "AETHER_JWT_SECRET": "JWT Secret",
         "FRONTEND_URL": "Frontend URL",
         "ENVIRONMENT": "Environment",
-        "GEMINI_API_KEY": "Gemini AI",
+        "NVIDIA_API_KEY": "NVIDIA NIM AI",
         "SMTP_HOST": "SMTP Host",
     }
 
