@@ -44,17 +44,17 @@ class TestFallbackFix(unittest.TestCase):
 
 
 class TestGenerateRemediation(unittest.TestCase):
-    @patch.dict(os.environ, {"GEMINI_API_KEY": ""}, clear=False)
+    @patch.dict(os.environ, {"NVIDIA_API_KEY": ""}, clear=False)
     def test_no_api_key_returns_fallback(self):
         result = generate_remediation("http://example.com", {"id": "v1", "header": "strict-transport-security"}, {})
         self.assertEqual(result["title"], "Enable HSTS")
 
-    @patch.dict(os.environ, {"GEMINI_API_KEY": "your_key_here"}, clear=False)
+    @patch.dict(os.environ, {"NVIDIA_API_KEY": "your_key_here"}, clear=False)
     def test_placeholder_key_returns_fallback(self):
         result = generate_remediation("http://example.com", {"id": "v1", "header": "content-security-policy"}, {})
         self.assertEqual(result["title"], "Add CSP")
 
-    @patch.dict(os.environ, {"GEMINI_API_KEY": ""}, clear=False)
+    @patch.dict(os.environ, {"NVIDIA_API_KEY": ""}, clear=False)
     def test_unknown_header_returns_generic_fallback(self):
         result = generate_remediation("http://example.com", {"id": "v1", "header": "x-unknown"}, {})
         self.assertEqual(result["title"], "Review application configuration")

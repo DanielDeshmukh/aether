@@ -216,7 +216,7 @@ docker-compose up -d
 |----------|----------|-------------|
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `AETHER_JWT_SECRET` | Yes | JWT signing secret |
-| `GEMINI_API_KEY` | No | Google Gemini API key for AI analysis |
+| `NVIDIA_API_KEY` | Yes | NVIDIA NIM API key for AI analysis (free tier at build.nvidia.com) |
 | `GOOGLE_CLIENT_ID` | No | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | No | Google OAuth client secret |
 | `SMTP_HOST` | No | SMTP server host |
