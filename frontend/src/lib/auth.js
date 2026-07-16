@@ -101,6 +101,9 @@ export const auth = {
 
       const data = await response.json();
       localStorage.setItem(ACCESS_TOKEN_KEY, data.access_token);
+      if (data.refresh_token) {
+        localStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);
+      }
       emitAuthChange();
       return data.access_token;
     } catch {

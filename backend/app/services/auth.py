@@ -27,6 +27,7 @@ def create_access_token(user_id: str, email: str) -> str:
         "iat": now,
         "exp": now + timedelta(minutes=_ACCESS_TOKEN_EXPIRY_MINUTES),
         "type": "access",
+        "jti": secrets.token_urlsafe(16),
     }
     return jwt.encode(payload, _get_jwt_secret(), algorithm="HS256")
 
@@ -39,6 +40,7 @@ def create_refresh_token(user_id: str) -> str:
         "iat": now,
         "exp": now + timedelta(days=_REFRESH_TOKEN_EXPIRY_DAYS),
         "type": "refresh",
+        "jti": secrets.token_urlsafe(16),
     }
     return jwt.encode(payload, _get_jwt_secret(), algorithm="HS256")
 
