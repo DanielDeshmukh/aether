@@ -261,7 +261,7 @@ class AttackOrchestrator:
             "Content-Type": "application/json",
         }
         body = {
-            "model": "nvidia/nemotron-3-content-safety",
+            "model": "nvidia/nemotron-3-nano-30b-a3b",
             "messages": [{"role": "user", "content": payload}],
         }
         response = await asyncio.to_thread(self._guarded_post, invoke_url, headers, body)
