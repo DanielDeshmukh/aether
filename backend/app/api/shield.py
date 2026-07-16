@@ -15,9 +15,14 @@ class AetherShield:
     def get_secret() -> bytes:
         secret = os.getenv("AETHER_SHIELD_SECRET", "").strip()
         if not secret:
-            # Fallback to a warning and a stable but suboptimal key if unset in dev
-            # In production, this should fail fast or be strictly required
-            logger.warning("AETHER_SHIELD_SECRET is not configured. Security is degraded.")
+            environment = os.getenv("ENVIRONMENT", "development").lower()
+            if environment == "production":
+                logger.critical("AETHER_SHIELD_SECRET is not set in production. Refusing to start with insecure fallback.")
+                raise RuntimeError(
+                    "AETHER_SHIELD_SECRET must be set in production. "
+                    "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(64))\""
+                )
+            logger.warning("AETHER_SHIELD_SECRET is not configured. Using dev fallback. Security is degraded.")
             return b"dev-fallback-secret-do-not-use-in-prod"
         return secret.encode("utf-8")
 
