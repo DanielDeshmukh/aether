@@ -212,6 +212,7 @@ async def refresh_token(payload: RefreshRequest, request: Request, _rate_limit: 
         raise HTTPException(status_code=401, detail="Invalid refresh token") from exc
 
     user_id = data["sub"]
+    old_jti = data.get("jti")
 
     with storage.get_connection() as conn:
         with conn.cursor() as cur:
@@ -226,8 +227,16 @@ async def refresh_token(payload: RefreshRequest, request: Request, _rate_limit: 
 
     email = row[0]
     access = create_access_token(user_id, email)
+    new_refresh = create_refresh_token(user_id)
 
-    return standard_response(data={"access_token": access, "token_type": "bearer"})
+    # Revoke old refresh token to enforce rotation
+    if old_jti and storage.database_configured():
+        try:
+            storage.revoke_token(old_jti, user_id, token_type="refresh")
+        except Exception:
+            logger.warning("Failed to revoke old refresh token for user %s", user_id)
+
+    return standard_response(data={"access_token": access, "refresh_token": new_refresh, "token_type": "bearer"})
 
 
 @router.get("/me")
