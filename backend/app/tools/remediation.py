@@ -3,9 +3,11 @@ import os
 from typing import Any, Dict, List
 
 try:
-    from google import genai
+    from openai import OpenAI
 except ImportError:  # pragma: no cover - resolved when requirements are installed
-    genai = None  # type: ignore[assignment]
+    OpenAI = None  # type: ignore[assignment,misc]
+
+NVIDIA_NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
 
 HEADER_FIXES = {
@@ -125,8 +127,8 @@ def _fallback_fix(vulnerability: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def generate_remediation(target_url: str, vulnerability: Dict[str, Any], results: Dict[str, Any]) -> Dict[str, Any]:
-    api_key = os.getenv("GEMINI_API_KEY", "").strip()
-    if genai is None or not api_key or api_key.lower().startswith("your_"):
+    api_key = os.getenv("NVIDIA_API_KEY", "").strip()
+    if OpenAI is None or not api_key or api_key.lower().startswith("your_"):
         return _fallback_fix(vulnerability)
 
     prompt = f"""
@@ -152,13 +154,15 @@ Rules:
 """.strip()
 
     try:
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=genai.types.Content(parts=[genai.types.Part(text=prompt)]),
-            config={"response_mime_type": "application/json"},
+        client = OpenAI(api_key=api_key, base_url=NVIDIA_NIM_BASE_URL)
+        response = client.chat.completions.create(
+            model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            max_tokens=2048,
+            temperature=0.2,
         )
-        cleaned = (response.text or "").strip()
+        cleaned = (response.choices[0].message.content or "").strip()
         if cleaned.startswith("```"):
             cleaned = cleaned.strip("`")
             cleaned = cleaned.removeprefix("json").strip()
