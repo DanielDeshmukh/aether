@@ -1,240 +1,225 @@
-⭐ If AETHER gave you a smarter way to think about automated pentesting — a star helps other security engineers find it. Takes 2 seconds.
+<div align="center">
 
-# AETHER (Automated Ethical Testing & Heuristic Evaluation Routine)
+![AETHER Logo](/images/logo.png)
 
-## Welcome
-Welcome to the AETHER repository. This project is an advanced, autonomous penetration testing platform designed to simulate the reasoning of a human security expert. By moving beyond static rulesets, AETHER identifies, executes, and validates **OWASP Top 10** exploits against target URLs with high precision and professional rigor.
+# AETHER
 
----
+### Automated Ethical Testing & Heuristic Evaluation Routine
 
-## Overview
-Traditional security scanners rely on predefined payloads, often resulting in high false positives. AETHER introduces an **Agentic Reasoning Loop**, enabling it to analyze and execute security tests in a context-aware, targeted manner.
+**An autonomous penetration testing platform that reasons like a human security expert.**
 
-Instead of blindly scanning, AETHER:
-*   **Observes:** Analyzes application behavior and tech stacks (React, FastAPI, PHP, etc.).
-*   **Identifies:** Maps the attack surface for vulnerabilities (SQLi, XSS, SSRF, etc.).
-*   **Executes:** Deploys context-aware exploits based on validated consent and ownership.
-*   **Validates:** Confirms successful breaches to eliminate false positives.
-*   **Remediates:** Provides professional code refactors and snippets to patch the flaw.
-
----
-
-## Objectives
-*   **Autonomous OWASP Top 10 Execution**  
-    Full automation of the OWASP Top 10. If an attack is possible, AETHER executes it to prove the flaw's existence.
-*   **Mandatory Consent & Ownership**  
-    Rigid safety protocols ensuring scans only proceed after user-verified ownership and breach consent.
-*   **Intelligent Remediation**  
-    Moving beyond "finding" bugs to "fixing" them by providing actionable code snippets and root-cause explanations.
-*   **Scalable Security-as-a-Service**  
-    A multi-tenant architecture built for continuous, scalable security audits.
+[![Tests](https://img.shields.io/badge/tests-231%20passed-brightgreen?style=flat-square)](https://github.com/DanielDeshmukh/aether)
+[![Stars](https://img.shields.io/github/stars/DanielDeshmukh/aether?style=flat-square&color=yellow)](https://github.com/DanielDeshmukh/aether/stargazers)
+[![NVIDIA NIM](https://img.shields.io/badge/AI-NVIDIA%20NIM-76B900?style=flat-square&logo=nvidia)](https://build.nvidia.com)
+[![Live](https://img.shields.io/badge/Live-Deployed-00D4FF?style=flat-square)](https://aether-pentesting.netlify.app)
+[![License](https://img.shields.io/badge/License-Proprietary-FF4444?style=flat-square)](#license)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.136-009688?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com)
 
 ---
 
-## System Architecture
-AETHER is structured as a modular SaaS platform designed for high-concurrency testing:
+AETHER doesn't just scan. It **thinks**, **plans**, **executes**, and **validates** exploits against live targets using AI-powered reasoning, then generates production-ready remediation patches.
 
-| Layer | Technology Stack | Purpose |
-| :--- | :--- | :--- |
-| **Frontend** | React.js (Dark Mode) | Real-time visualization of attacks, telemetry, and vulnerability dashboards. |
-| **Orchestrator** | LangGraph / Python | The "Brain." Manages the stateful reasoning loop and attack planning. |
-| **Engine** | FastAPI + Playwright + Safety & Rate Limiting | The execution layer. Interacts with the DOM, delivers payloads, and enforces operational safety gates with request throttling and scan-identification headers. |
-| **Intelligence** | Gemini 2.0 Flash / Claude | Interprets HTTP responses and generates adaptive bypass payloads. |
-| **Backend** | PostgreSQL (psycopg) + Custom JWT Auth | Manages auth, scan persistence, and the "Flaw & Remediation" database. |
+</div>
 
 ---
 
-## Core Features
-*   **The Threat Feed**  
-    A live stream of terminal-style logs showing active payload delivery and server responses.
-*   **OWASP Attack Modules**  
-    Specialized routines for Injection, Broken Access Control, Cryptographic Failures, and more.
-*   **Professional Remediation Engine**  
-    For every confirmed flaw, AETHER generates a technical report including "Current Vulnerable Code" vs. "Proposed Secure Refactor."
-*   **Kill Switch & Safety Gate**  
-    Immediate termination of all active sessions and automated rollback if target instability is detected or User's concern arise.
+## What It Does
 
----
+AETHER is a **Security-as-a-Service** platform that autonomously discovers, validates, and remediates web application vulnerabilities. It replaces static rule-based scanners with an agentic reasoning loop that mimics how a senior penetration tester approaches a target.
 
-## Development Roadmap
-
-### Completed
-
-| Milestone | Notes |
-| :--- | :--- |
-| **Setup** | Repository init, PostgreSQL schema foundation, and custom JWT auth wiring. |
-| **Database Persistence Resilience** | Stabilized the transactional `persist_full_pipeline` path and hardened scan/session/profile persistence. |
-| **Dynamic Profile Normalization** | Normalized profile payload generation so automated and user-linked profiles persist safely even with nullable identity fields. |
-| **NVIDIA Agentic Reasoning Loop Integration** | Bridged Nemotron-guided orchestration into the live WebSocket stream with tenant-safe persistence handoff. |
-| **Remediation Logic** | Added a typed remediation engine that turns validated findings into root-cause analysis and secure refactor packages. |
-
-### In Progress
-
-| Milestone | Notes |
-| :--- | :--- |
-| **Core Engine** | Continuing development of the FastAPI + Playwright interaction layer and bounded validation modules. |
-| **Headless Playwright Validation Lanes** | Refining the proof-of-concept exploit lanes into broader, repeatable validation coverage. |
-
-### Upcoming
-
-| Milestone | Notes |
-| :--- | :--- |
-| **Auto-Remediation** | Automated Pull Request generation for GitHub/GitLab repair workflows. |
-| **Deployment** | Hardened CI/CD pipelines and production-ready environment controls. |
-| **Hard-RAG Clinical Protocol (Project Ella)** | High-assurance retrieval and protocol orchestration for the clinical reasoning track. |
-| **Automated Ethical Auditing** | Continuous auditing of guardrails, consent flows, and operator safety boundaries. |
-
----
-
-
-> **Disclaimer:** AETHER is designed for ethical security testing. Use of this tool requires explicit, written consent from the target system owner. Unauthorized use is strictly prohibited.
-
-## Delivery Phases
-
-- [x] **Phase 12 - Hardening: Quota & Identity Guard**
-- [x] **Phase 13 - Hardening: Attack Surface Reduction**
-- [x] **Phase 14 - Final Audit & Launch**
-
-## Post-Launch Reliability
-
-- [x] Replaced legacy scan persistence path with transactional `persist_full_pipeline`.
-- [x] Hardened orchestration timeout handling for upstream AI overload scenarios.
-
----
-
-## Setup Instructions
-
-### Prerequisites
-
-- Python 3.11+
-- Node.js 18+
-- PostgreSQL 14+
-- Docker (optional)
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/your-org/aether.git
-cd aether
 ```
-
-### 2. Backend Setup
-
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or
-venv\Scripts\activate  # Windows
-
-pip install -r requirements.txt
-```
-
-### 3. Database Setup
-
-```bash
-# Create PostgreSQL database
-createdb aether
-
-# Set DATABASE_URL in .env
-echo "DATABASE_URL=postgresql://user:password@localhost:5432/aether" >> .env
-
-# Run migrations
-alembic upgrade head
-```
-
-### 4. Google Cloud Console Setup (OAuth)
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select existing
-3. Enable Google+ API
-4. Go to Credentials > Create Credentials > OAuth 2.0 Client ID
-5. Set authorized redirect URIs to `http://localhost:8080/api/v1/auth/google/callback`
-6. Copy Client ID and Client Secret to `.env`
-
-### 5. SMTP Configuration (Email)
-
-```bash
-# Required for magic links and report delivery
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
-SMTP_FROM=AETHER <noreply@aether.local>
-```
-
-### 6. JWT Secret Generation
-
-```bash
-# Generate a secure random secret
-python -c "import secrets; print(secrets.token_urlsafe(64))"
-
-# Add to .env
-echo "AETHER_JWT_SECRET=your-generated-secret" >> .env
-```
-
-### 7. Frontend Setup
-
-```bash
-cd frontend
-npm install
-```
-
-### 8. Environment Variables
-
-Copy the example environment file and fill in your values:
-
-```bash
-cp .env.example .env
-```
-
-See `.env.example` for all required variables.
-
-### 9. Running Development Servers
-
-```bash
-# Terminal 1 - Backend
-cd backend
-uvicorn main:app --reload --port 8000
-
-# Terminal 2 - Frontend
-cd frontend
-npm run dev
-```
-
-### 10. Docker Setup (Optional)
-
-```bash
-docker-compose up -d
+Target URL  -->  Recon  -->  AI Planning  -->  Exploit Execution  -->  Validation  -->  Remediation
+                  |              |                    |                    |                |
+            Tech stack    Nemotron 3 Super     OWASP Top 10         Confirms        Generates
+            fingerprint   generates attack    attack lanes with     breach with     copy-paste
+            + passive     plan with THOUGHT   Playwright-backed     evidence        security
+            recon         / OBSERVE / PLAN    active testing        + screenshots   patches
 ```
 
 ---
 
-## Environment Variables
+## Core Capabilities
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `AETHER_JWT_SECRET` | Yes | JWT signing secret |
-| `NVIDIA_API_KEY` | Yes | NVIDIA NIM API key for AI analysis (free tier at build.nvidia.com) |
-| `GOOGLE_CLIENT_ID` | No | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | No | Google OAuth client secret |
-| `SMTP_HOST` | No | SMTP server host |
-| `SMTP_PORT` | No | SMTP server port |
-| `SMTP_USER` | No | SMTP username |
-| `SMTP_PASSWORD` | No | SMTP password |
-| `FRONTEND_URL` | Yes | Frontend URL for CORS |
-| `ENVIRONMENT` | No | `development` or `production` |
+### Autonomous Exploit Execution
+
+AETHER executes **all 10 OWASP Top 10** categories autonomously once consent is verified:
+
+| Category | What AETHER Tests |
+|----------|-------------------|
+| **A01: Broken Access Control** | Privilege escalation, IDOR, CORS misconfig |
+| **A02: Cryptographic Failures** | Weak TLS, mixed content, certificate validation |
+| **A03: Injection** | SQL injection, XSS, command injection |
+| **A04: Insecure Design** | Business logic flaws, missing rate limiting |
+| **A05: Security Misconfiguration** | Default creds, verbose errors, debug endpoints |
+| **A06: Vulnerable Components** | Outdated libraries, known CVEs |
+| **A07: Auth Failures** | Session management, brute force, token weaknesses |
+| **A08: Data Integrity** | Insecure deserialization, supply chain |
+| **A09: Logging Failures** | Insufficient logging, missing audit trails |
+| **A10: SSRF** | Server-side request forgery, internal network probing |
+
+### AI-Powered Reasoning
+
+AETHER uses a **multi-model NVIDIA NIM pipeline** for different stages of the assessment:
+
+| Model | Role | Why |
+|-------|------|-----|
+| **Nemotron 3 Super 120B** | Scan planning + final verdicts | 1M context window, reasoning with transparent thought chains |
+| **Llama 3.3 Nemotron Super 49B** | Remediation code generation | 91.3% MBPP score, optimized for security patch generation |
+| **Nemotron 3 Nano 30B** | Content safety filtering | Sub-second response for real-time safety gating |
+| **DeepSeek V4 Flash** | Fast fallback analysis | 284B MoE, ~120 tok/s for high-throughput scenarios |
+| **MiniMax M2.7** | Heavy reasoning fallback | 230B MoE, highest intelligence for complex verdicts |
+
+### Professional Remediation
+
+Every confirmed vulnerability generates a **production-ready security patch**:
+
+```python
+# BEFORE: Vulnerable Code
+cursor.execute(f"SELECT * FROM users WHERE email = '{user_email}'")
+
+# AFTER: Secure Refactor
+cursor.execute("SELECT * FROM users WHERE email = %s", (user_email,))
+```
+
+Remediations include Nginx, Apache, Node.js, Python, Docker, and Kubernetes configurations.
+
+### Real-Time Telemetry
+
+- **Live WebSocket stream** of the entire attack lifecycle
+- **Terminal-style console** showing payload delivery and server responses
+- **PDF report generation** with executive summary and technical findings
+- **Email delivery** of reports directly from the platform
 
 ---
 
-## API Documentation
+## Safety Architecture
 
-See [docs/api.md](docs/api.md) for complete API documentation.
+AETHER is built with **safety-first principles**:
+
+| Control | Implementation |
+|---------|---------------|
+| **Mandatory Consent** | Scans require explicit ownership verification and breach consent before execution |
+| **AETHER-Shield** | HMAC-based safety middleware that validates every request with cryptographic tokens |
+| **Target Verification** | Domain ownership must be proven via DNS TXT records or HTTP tokens |
+| **SSRF Protection** | Private IPs, loopback, and internal networks are blocked before any request |
+| **Kill Switch** | Immediate termination of all active sessions with automated rollback |
+| **Rate Limiting** | Per-IP rate limits on scan creation (10/hr), report downloads (30/hr), and emails (5/hr) |
+| **Quota Enforcement** | Per-user scan quotas with tier-based limits (Free/Pro/Enterprise) |
+| **Non-Root Container** | Production Docker images run as unprivileged user |
+| **Token Rotation** | Refresh tokens are rotated on every use; all tokens include revocable JTIs |
 
 ---
 
-## Architecture
+## Tech Stack
 
-See [docs/architecture.md](docs/architecture.md) for system architecture details.
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | React 19, Vite, React Router, Tailwind CSS |
+| **Backend** | FastAPI, Python 3.12, WebSockets |
+| **AI Orchestration** | NVIDIA NIM (OpenAI-compatible API) |
+| **Browser Automation** | Playwright with headless Chromium |
+| **Database** | PostgreSQL 15 with psycopg3 connection pooling |
+| **Auth** | Custom JWT with magic link + OAuth (Google/GitHub) |
+| **PDF Generation** | fpdf2 with Playwright-rendered evidence screenshots |
+| **Deployment** | Fly.io (backend), Netlify (frontend), Docker multi-stage build |
 
+---
+
+## Security Features
+
+- **Magic Link Authentication** — Passwordless login via email
+- **OAuth 2.0** — Google and GitHub social login
+- **JWT with Rotation** — Access tokens (60min) + rotating refresh tokens (7 days)
+- **Token Revocation** — All tokens include JTIs; revoked on logout, compromise, or account deletion
+- **Tenant Isolation** — All data scoped to `user_id`; scan records, findings, and remediations are isolated
+- **Input Validation** — SSRF protection, URL normalization, Pydantic validation on all endpoints
+- **Security Headers** — HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
+- **Structured Logging** — Request/response logging with method, path, status, and timing
+
+---
+
+## Project Structure
+
+```
+aether/
+├── backend/
+│   ├── app/
+│   │   ├── api/            # FastAPI routes, auth, WebSocket endpoints
+│   │   ├── orchestrator/   # BrainOrchestrator, AttackOrchestrator, remediation
+│   │   ├── engine/         # Playwright validation lanes, heuristic engine
+│   │   ├── tools/          # Port scanner, header audit, remediation generation
+│   │   ├── services/       # Storage, auth, email, domain verification
+│   │   └── config.py       # Pydantic-based configuration
+│   ├── tests/              # 231 unit + integration tests
+│   ├── alembic/            # Database migrations
+│   ├── Dockerfile          # Multi-stage production build
+│   └── start.sh            # Gunicorn entrypoint
+├── frontend/
+│   ├── src/
+│   │   ├── components/     # UI components (Navbar, ErrorBoundary, etc.)
+│   │   ├── pages/          # Dashboard, ScanDetail, Settings, Landing
+│   │   ├── lib/            # Auth, API client, utilities
+│   │   └── App.jsx         # Route definitions
+│   └── package.json
+├── context/                # Architecture docs, coding standards
+└── scripts/                # Deployment validation, utilities
+```
+
+---
+
+## Testing
+
+```bash
+# Run full test suite
+cd backend && python -m pytest tests/ -v
+
+# Results: 231 passed, 0 failed
+```
+
+**Test Coverage:**
+- Auth routes and JWT lifecycle
+- Storage CRUD and privacy isolation
+- Rate limiting and quota enforcement
+- WebSocket connection handling
+- Validation lanes (OWASP attack modules)
+- Remediation flow (AI + fallback paths)
+- PDF report generation
+- Email delivery
+- Domain verification
+
+---
+
+## API Reference
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/scans` | POST | Create a new scan |
+| `/api/v1/scans` | GET | List all scans for authenticated user |
+| `/api/v1/scans/{id}` | GET | Get scan details |
+| `/api/v1/scans/{id}/report` | GET | Download PDF report |
+| `/api/v1/scans/{id}/report/email` | POST | Email PDF report |
+| `/ws/scan/{id}` | WS | Real-time scan telemetry |
+| `/ws/remediation/{id}` | WS | Remediation generation stream |
+| `/ws/dashboard` | WS | Dashboard live updates |
+| `/api/v1/auth/magic-link` | POST | Request magic link |
+| `/api/v1/auth/refresh` | POST | Refresh access token |
+| `/api/v1/health` | GET | Health check |
+
+---
+
+## License
+
+This project is proprietary software. All rights reserved by the author.
+
+Unauthorized reproduction, distribution, or modification is strictly prohibited.
+
+---
+
+<div align="center">
+
+**Built with precision. Deployed with confidence.**
+
+[AETHER Live Demo](https://aether-pentesting.netlify.app) · [Report Issues](https://github.com/DanielDeshmukh/aether/issues)
+
+</div>
