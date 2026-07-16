@@ -3,10 +3,15 @@ set -eu
 
 PORT="${PORT:-8000}"
 WEB_CONCURRENCY="${WEB_CONCURRENCY:-2}"
+ENVIRONMENT="${ENVIRONMENT:-development}"
 
 # Run database migrations
 echo "Running Alembic migrations..."
-alembic upgrade head 2>/dev/null || echo "Alembic migration skipped (no migrations or DB not ready)"
+if [ "$ENVIRONMENT" = "production" ]; then
+  alembic upgrade head
+else
+  alembic upgrade head 2>/dev/null || echo "Alembic migration skipped (no migrations or DB not ready)"
+fi
 
 # Set Playwright browser path for headless Chromium
 export PLAYWRIGHT_BROWSERS_PATH=/usr/lib/chromium
@@ -17,5 +22,7 @@ exec gunicorn app.api.main:app \
   --workers "${WEB_CONCURRENCY}" \
   --bind "0.0.0.0:${PORT}" \
   --timeout 120 \
+  --max-requests 1000 \
+  --max-requests-jitter 50 \
   --access-logfile - \
   --error-logfile -
