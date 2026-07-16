@@ -29,7 +29,7 @@ services:
       AETHER_JWT_SECRET: ${AETHER_JWT_SECRET:-dev_secret_change_in_production}
       ENVIRONMENT: development
       FRONTEND_URL: http://localhost:8080
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8000/api/v1/auth/google/callback}

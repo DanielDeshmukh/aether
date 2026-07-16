@@ -26,9 +26,11 @@ from app.tools.remediation import find_vulnerability, generate_remediation
 from app.tools.scanner import format_port_logs, port_scan
 
 try:
-    from google import genai
+    from openai import OpenAI
 except ImportError:  # pragma: no cover - resolved when requirements are installed
-    genai = None  # type: ignore[assignment]
+    OpenAI = None  # type: ignore[assignment,misc]
+
+NVIDIA_NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
 logger = logging.getLogger("aether.brain")
 
@@ -204,8 +206,8 @@ class BrainState:
 
 class PentestAgent:
     def __init__(self) -> None:
-        self.api_key = os.getenv("GEMINI_API_KEY", "").strip()
-        self.model_name = "gemini-2.5-flash"
+        self.api_key = os.getenv("NVIDIA_API_KEY", "").strip()
+        self.model_name = "nvidia/nemotron-3-super-120b-a12b"
         self.request_timeout_seconds = 45
 
     def _has_usable_api_key(self) -> bool:
@@ -255,51 +257,47 @@ Rules:
 - Output raw JSON only.
 """.strip()
 
-    def _generate_with_retry(self, client, contents, config, max_retries=5):
+    def _generate_with_retry(self, client, messages, max_retries=5):
         """Generates content with model fallback and exponential backoff for transient errors."""
-        model_options = [self.model_name, "gemini-2.5-flash-lite", "gemini-2.5-pro"]
+        model_options = [self.model_name, "deepseek-ai/deepseek-v4-flash", "minimaxai/minimax-m2.7"]
         last_exception = None
 
         for model in model_options:
             for attempt in range(max_retries):
                 try:
-                    return client.models.generate_content(
+                    return client.chat.completions.create(
                         model=model,
-                        contents=contents,
-                        config=config,
+                        messages=messages,
+                        response_format={"type": "json_object"},
+                        max_tokens=4096,
                     )
                 except Exception as e:
                     last_exception = e
                     error_msg = str(e).upper()
-                    # Check for transient/overload errors (503, 504, 429, Resource Exhausted)
-                    if any(err in error_msg for err in ["503", "504", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED", "DEADLINE_EXCEEDED", "TIMEOUT"]):
+                    # Check for transient/overload errors (503, 504, 429, rate limits)
+                    if any(err in error_msg for err in ["503", "504", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED", "DEADLINE_EXCEEDED", "TIMEOUT", "RATE_LIMIT", "OVERLOADED"]):
                         wait = (2 ** attempt) + random.uniform(0, 1)
-                        logger.warning("Gemini model %s overloaded. Attempt %d/%d, retrying in %.2fs", model, attempt+1, max_retries, wait)
+                        logger.warning("NVIDIA NIM model %s overloaded. Attempt %d/%d, retrying in %.2fs", model, attempt+1, max_retries, wait)
                         time.sleep(wait)
                     else:
                         # Non-transient error (e.g. invalid auth, safety filters), try next model in chain
-                        logger.error("Gemini model %s failed with non-transient error: %s", model, error_msg)
+                        logger.error("NVIDIA NIM model %s failed with non-transient error: %s", model, error_msg)
                         break
-        raise last_exception or RuntimeError("Gemini failed after retries and model fallback. Check API key and quota.")
+        raise last_exception or RuntimeError("NVIDIA NIM failed after retries and model fallback. Check API key and quota.")
 
     def generate_initial_plan(self, target_url: str) -> InitialPlan:
         hostname = urlparse(target_url).netloc.upper()
 
-        if genai is None or not self._has_usable_api_key():
+        if OpenAI is None or not self._has_usable_api_key():
             return self._fallback_plan(hostname, target_url)
 
         try:
-            client = genai.Client(api_key=self.api_key)
+            client = OpenAI(api_key=self.api_key, base_url=NVIDIA_NIM_BASE_URL)
             prompt_text = self._build_prompt(target_url, hostname)
-            response = self._generate_with_retry(
-                client,
-                contents=genai.types.Content(parts=[genai.types.Part(text=prompt_text)]),
-                config={
-                    "response_mime_type": "application/json",
-                    "response_json_schema": InitialPlan.model_json_schema(),
-                },
-            )
-            return self._validate_response(response.text, hostname, target_url)
+            messages = [{"role": "user", "content": prompt_text}]
+            response = self._generate_with_retry(client, messages=messages)
+            response_text = response.choices[0].message.content or ""
+            return self._validate_response(response_text, hostname, target_url)
         except Exception as error:
             logger.error("Initial planning failed after retries: %s. Degrading to fallback plan.", str(error))
             return self._fallback_plan(hostname, target_url)
@@ -374,7 +372,7 @@ Rules:
         return plan
 
     def generate_final_verdict(self, target_url: str, results: Dict[str, Any]) -> FinalVerdict:
-        if genai is None or not self._has_usable_api_key():
+        if OpenAI is None or not self._has_usable_api_key():
             return self._fallback_verdict(results)
 
         # Filter results to keep size manageable for LLM
@@ -401,17 +399,10 @@ Rules:
 """.strip()
 
         try:
-            client = genai.Client(api_key=self.api_key)
-            verdict_prompt = prompt.strip()
-            response = self._generate_with_retry(
-                client,
-                contents=genai.types.Content(parts=[genai.types.Part(text=verdict_prompt)]),
-                config={
-                    "response_mime_type": "application/json",
-                    "response_json_schema": FinalVerdict.model_json_schema(),
-                },
-            )
-            cleaned = response.text.strip()
+            client = OpenAI(api_key=self.api_key, base_url=NVIDIA_NIM_BASE_URL)
+            messages = [{"role": "user", "content": prompt}]
+            response = self._generate_with_retry(client, messages=messages)
+            cleaned = (response.choices[0].message.content or "").strip()
             if cleaned.startswith("```"):
                 cleaned = cleaned.strip("`")
                 cleaned = cleaned.removeprefix("json").strip()
