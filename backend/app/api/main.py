@@ -649,6 +649,23 @@ async def websocket_scan(websocket: WebSocket, scan_id: str):
         await websocket.close(code=1008)
         return
 
+    # Verify the connecting user owns this scan
+    token = websocket.query_params.get("token", "")
+    if token:
+        try:
+            from app.services.auth import decode_token
+            data = decode_token(token, expected_type="access")
+            connecting_user = data.get("sub")
+            scan_owner = scan.get("user_id")
+            if connecting_user and scan_owner and connecting_user != scan_owner:
+                await websocket.send_json({"type": "error", "phase": "observe", "msg": "ACCESS DENIED."})
+                await websocket.close(code=1008)
+                return
+        except Exception:
+            await websocket.send_json({"type": "error", "phase": "observe", "msg": "INVALID TOKEN."})
+            await websocket.close(code=1008)
+            return
+
     target_url = str(scan["target_url"])
     user_id: str | None = scan.get("user_id")
     resolved_scan_id = scan_storage.resolve_record_identifier(scan_id)
@@ -1396,15 +1413,28 @@ async def websocket_remediation(websocket: WebSocket, scan_id: str):
     except Exception:
         logger.exception("Remediation schema sync failed for %s", scan_id)
 
-    user_id: str | None = websocket.query_params.get("user_id")
+    token = websocket.query_params.get("token", "")
+    if not token:
+        await websocket.send_json({"type": "error", "phase": "remediate", "msg": "AUTHENTICATION REQUIRED."})
+        await websocket.close(code=1008)
+        return
 
-    record = scan_storage.fetch_scan(scan_id, user_id=user_id) if user_id else None
+    try:
+        from app.services.auth import decode_token
+        data = decode_token(token, expected_type="access")
+        user_id = data.get("sub")
+        if not user_id:
+            raise ValueError("No subject")
+    except Exception:
+        await websocket.send_json({"type": "error", "phase": "remediate", "msg": "INVALID TOKEN."})
+        await websocket.close(code=1008)
+        return
+
+    record = scan_storage.fetch_scan(scan_id, user_id=user_id)
     if not record:
         await websocket.send_json({"type": "error", "phase": "remediate", "msg": "SCAN RECORD NOT FOUND OR ACCESS DENIED."})
         await websocket.close(code=1008)
         return
-
-    assert user_id is not None
     brain = hydrate_brain_from_record(scan_id=scan_id, record=record)
 
     try:
@@ -1537,16 +1567,9 @@ async def websocket_dashboard(websocket: WebSocket):
         await websocket.close(code=1008)
         return
 
-    import jwt as pyjwt
-
-    jwt_secret = os.getenv("AETHER_JWT_SECRET", "").strip()
-    if not jwt_secret:
-        await websocket.send_json({"type": "error", "msg": "AUTH NOT CONFIGURED."})
-        await websocket.close(code=1008)
-        return
-
     try:
-        payload = pyjwt.decode(token, jwt_secret, algorithms=["HS256"], audience="authenticated")
+        from app.services.auth import decode_token
+        payload = decode_token(token, expected_type="access")
         user_id = payload.get("sub")
         if not user_id:
             raise ValueError("No subject")
