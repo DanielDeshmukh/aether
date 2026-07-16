@@ -61,6 +61,11 @@ COPY backend/.env.example ./.env.example
 # Install Playwright browsers (Chromium only)
 RUN playwright install chromium
 
+# Create non-root user for security
+RUN groupadd -r aether && useradd -r -g aether -d /app -s /sbin/nologin aether \
+    && chown -R aether:aether /app
+USER aether
+
 RUN chmod +x /app/start.sh
 
 EXPOSE 8000

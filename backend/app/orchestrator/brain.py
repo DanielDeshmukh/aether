@@ -1059,7 +1059,7 @@ async def process_agent_response(
 
     inserted_ids: List[str] = []
     for flaw in payload.vulnerabilities:
-        print(f"DEBUG: [{datetime.now(timezone.utc).isoformat()}] User {normalized_user_id} found {flaw.category}")
+        logger.debug("User %s found %s", normalized_user_id, flaw.category)
         vulnerability_id = await asyncio.to_thread(
             storage.insert_vulnerability,
             normalized_user_id,

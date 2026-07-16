@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import logging
 import re
 import socket
 import ssl
@@ -8,6 +9,8 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Dict, List
 from urllib.parse import urlparse
+
+logger = logging.getLogger("aether.validation_lanes")
 
 try:
     from playwright.async_api import BrowserContext
@@ -323,10 +326,10 @@ class ValidationLaneManager:
                                 provided_solution="Renew the SSL/TLS certificate before expiration.",
                                 evidence={"hostname": hostname, "expiry": cert_expiry, "days_remaining": days_left},
                             ))
-                    except Exception:
-                        pass
-            except Exception:
-                pass
+                    except Exception as e:
+                        logger.debug("SSL cert check failed for %s: %s", hostname, e)
+            except Exception as e:
+                logger.debug("TLS connection failed for %s: %s", hostname, e)
 
         page = await context.new_page()
         try:
@@ -386,8 +389,8 @@ class ValidationLaneManager:
                                 provided_solution="Load all resources over HTTPS or use protocol-relative URLs.",
                                 evidence={"http_resources": [r[:150] for r in http_resources[:5]]},
                             ))
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("Mixed content check failed: %s", e)
 
             await self.trace_writer("analyze", "LAMBO-DARK CRYPTO FAILURES LANE COMPLETED.")
         finally:
@@ -413,8 +416,8 @@ class ValidationLaneManager:
                 cert = s.getpeercert()
                 if cert and "notAfter" in cert:
                     cert_expiry = cert["notAfter"]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("TLS version check failed for %s: %s", hostname, e)
         finally:
             sock.close()
         return tls_ok, cert_expiry  # type: ignore[return-value]
@@ -448,7 +451,8 @@ class ValidationLaneManager:
                                 evidence={"path": path, "status": doc_resp.status},
                             ))
                             break
-                except Exception:
+                except Exception as e:
+                    logger.debug("Endpoint check failed: %s", e)
                     continue
 
             # Check for missing rate limiting on sensitive endpoints
@@ -473,7 +477,8 @@ class ValidationLaneManager:
                                 evidence={"endpoint": endpoint, "status": resp.status, "headers": list(resp_headers.keys())[:10]},
                             ))
                             break
-                except Exception:
+                except Exception as e:
+                    logger.debug("Endpoint check failed: %s", e)
                     continue
 
             # Check for open redirect via query parameter manipulation
@@ -494,7 +499,8 @@ class ValidationLaneManager:
                             evidence={"param": param, "redirect_url": resp.url},
                         ))
                         break
-                except Exception:
+                except Exception as e:
+                    logger.debug("Endpoint check failed: %s", e)
                     continue
 
             if response:
@@ -591,7 +597,8 @@ class ValidationLaneManager:
                                 provided_solution="Disable directory listing on the web server.",
                                 evidence={"path": dir_path, "status": dir_resp.status},
                             ))
-                except Exception:
+                except Exception as e:
+                    logger.debug("Endpoint check failed: %s", e)
                     continue
 
             # Check for unnecessary HTTP methods (TRACE, OPTIONS leaking info)
@@ -621,8 +628,8 @@ class ValidationLaneManager:
                                 provided_solution=f"Disable {method} method on the web server.",
                                 evidence={"allowed_methods": allowed_methods, "dangerous_method": method},
                             ))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Method override check failed: %s", e)
 
             # Check for default credentials on known admin panels
             admin_paths = ["/admin", "/admin/login", "/wp-admin", "/phpmyadmin"]
@@ -644,7 +651,8 @@ class ValidationLaneManager:
                                 evidence={"path": admin_path, "status": admin_resp.status},
                             ))
                             break
-                except Exception:
+                except Exception as e:
+                    logger.debug("Endpoint check failed: %s", e)
                     continue
 
             await self.trace_writer("analyze", "LAMBO-DARK MISCONFIGURATION LANE COMPLETED.")
@@ -722,8 +730,8 @@ class ValidationLaneManager:
                                     provided_solution="Remove SourceMap files from production builds.",
                                     evidence={"sourcemap_url": sourcemap_url},
                                 ))
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("Source map check failed: %s", e)
 
             await self.trace_writer("analyze", "LAMBO-DARK VULNERABLE COMPONENTS LANE COMPLETED.")
         finally:
@@ -811,8 +819,8 @@ class ValidationLaneManager:
                                     evidence={"initial_cookies": initial_cookies[:100], "post_login_cookies": post_login_cookies[:100]},
                                 ))
                             break
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Component version check failed: %s", e)
 
             await self.trace_writer("analyze", "LAMBO-DARK AUTH FAILURES LANE COMPLETED.")
         finally:
@@ -886,7 +894,8 @@ class ValidationLaneManager:
                                 evidence={"path": path, "status": cicd_resp.status},
                             ))
                             break
-                except Exception:
+                except Exception as e:
+                    logger.debug("Endpoint check failed: %s", e)
                     continue
 
             await self.trace_writer("analyze", "LAMBO-DARK DATA INTEGRITY LANE COMPLETED.")
@@ -1012,7 +1021,8 @@ class ValidationLaneManager:
                                 evidence={"payload": payload, "artifact": artifact},
                             ))
                             break
-                except Exception:
+                except Exception as e:
+                    logger.debug("Endpoint check failed: %s", e)
                     continue
 
             # Test with different user agents to detect user-agent based filtering
@@ -1041,7 +1051,8 @@ class ValidationLaneManager:
                                 evidence={"user_agent": ua_info["name"], "ua_string": ua_info["ua"]},
                             ))
                             break
-                except Exception:
+                except Exception as e:
+                    logger.debug("Endpoint check failed: %s", e)
                     continue
 
             await self.trace_writer("analyze", "LAMBO-DARK SSRF LANE COMPLETED.")
