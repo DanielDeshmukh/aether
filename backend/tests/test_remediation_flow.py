@@ -16,6 +16,7 @@ if str(BACKEND_DIR) not in sys.path:
 from app.api import main as api_main  # noqa: E402
 from app.orchestrator.brain import BrainOrchestrator  # noqa: E402
 from app.orchestrator.remediation_agent import RemediationAgent  # noqa: E402
+from app.services.auth import create_access_token  # noqa: E402
 from app.services.domain_verification import DomainVerificationResult  # noqa: E402
 
 
@@ -273,7 +274,7 @@ class TestRemediationFlow(unittest.TestCase):
                      "pull_request_number": 42,
                  },
              ):
-            with self.client.websocket_connect(f"/ws/remediation/{scan_id}?user_id={user_id}") as websocket:
+            with self.client.websocket_connect(f"/ws/remediation/{scan_id}?token={create_access_token(user_id, 'test@example.com')}") as websocket:
                 websocket.send_json(
                     {
                         "action": "create_pull_request",
