@@ -139,57 +139,6 @@ AETHER is built with **safety-first principles**:
 
 ---
 
-## Project Structure
-
-```
-aether/
-├── backend/
-│   ├── app/
-│   │   ├── api/            # FastAPI routes, auth, WebSocket endpoints
-│   │   ├── orchestrator/   # BrainOrchestrator, AttackOrchestrator, remediation
-│   │   ├── engine/         # Playwright validation lanes, heuristic engine
-│   │   ├── tools/          # Port scanner, header audit, remediation generation
-│   │   ├── services/       # Storage, auth, email, domain verification
-│   │   └── config.py       # Pydantic-based configuration
-│   ├── tests/              # 231 unit + integration tests
-│   ├── alembic/            # Database migrations
-│   ├── Dockerfile          # Multi-stage production build
-│   └── start.sh            # Gunicorn entrypoint
-├── frontend/
-│   ├── src/
-│   │   ├── components/     # UI components (Navbar, ErrorBoundary, etc.)
-│   │   ├── pages/          # Dashboard, ScanDetail, Settings, Landing
-│   │   ├── lib/            # Auth, API client, utilities
-│   │   └── App.jsx         # Route definitions
-│   └── package.json
-├── context/                # Architecture docs, coding standards
-└── scripts/                # Deployment validation, utilities
-```
-
----
-
-## Testing
-
-```bash
-# Run full test suite
-cd backend && python -m pytest tests/ -v
-
-# Results: 231 passed, 0 failed
-```
-
-**Test Coverage:**
-- Auth routes and JWT lifecycle
-- Storage CRUD and privacy isolation
-- Rate limiting and quota enforcement
-- WebSocket connection handling
-- Validation lanes (OWASP attack modules)
-- Remediation flow (AI + fallback paths)
-- PDF report generation
-- Email delivery
-- Domain verification
-
----
-
 ## API Reference
 
 | Endpoint | Method | Description |
