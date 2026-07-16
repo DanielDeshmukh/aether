@@ -1,6 +1,6 @@
 <div align="center">
 
-![AETHER Logo](/images/logo.png)
+![AETHER Banner](banner.png)
 
 # AETHER
 
