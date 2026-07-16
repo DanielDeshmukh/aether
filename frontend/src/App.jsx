@@ -16,6 +16,9 @@ import ScanDetail from './pages/ScanDetail';
 import Settings from './pages/Settings';
 import Security from './pages/Security';
 import Legal from './pages/Legal';
+import NotFound from './pages/NotFound';
+import ErrorBoundary from './components/ErrorBoundary';
+import ProtectedRoute from './components/ProtectedRoute';
 import { useDocumentTitle } from './lib/useDocumentTitle';
 
 
@@ -42,21 +45,24 @@ const LandingPage = () => {
 
 function App() {
   return (
-    <div className="app-container font-lambo bg-lambo-black min-h-screen selection:bg-lambo-gold selection:text-lambo-black scroll-smooth">
-      <main>
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/join-us" element={<JoinUs />} />
-          <Route path="/auth/callback" element={<AuthCallback />} />
-          <Route path="/home" element={<Homepage/>} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/dashboard/:scanId" element={<ScanDetail />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/security" element={<Security />} />
-          <Route path="/legal" element={<Legal />} />
-        </Routes>
-      </main>
-    </div>
+    <ErrorBoundary>
+      <div className="app-container font-lambo bg-lambo-black min-h-screen selection:bg-lambo-gold selection:text-lambo-black scroll-smooth">
+        <main>
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/join-us" element={<JoinUs />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="/security" element={<Security />} />
+            <Route path="/legal" element={<Legal />} />
+            <Route path="/home" element={<ProtectedRoute><Homepage /></ProtectedRoute>} />
+            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/dashboard/:scanId" element={<ProtectedRoute><ScanDetail /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </main>
+      </div>
+    </ErrorBoundary>
   );
 }
 
