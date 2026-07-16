@@ -48,3 +48,30 @@ async def rate_limit_refresh(request: Request) -> None:
         max_hits=20,
         window_seconds=3600,
     )
+
+
+async def rate_limit_scan_creation(request: Request) -> None:
+    client_ip = request.client.host if request.client else "unknown"
+    _limiter.check(
+        key=f"scan-create:{client_ip}",
+        max_hits=10,
+        window_seconds=3600,
+    )
+
+
+async def rate_limit_report_download(request: Request) -> None:
+    client_ip = request.client.host if request.client else "unknown"
+    _limiter.check(
+        key=f"report-dl:{client_ip}",
+        max_hits=30,
+        window_seconds=3600,
+    )
+
+
+async def rate_limit_report_email(request: Request) -> None:
+    client_ip = request.client.host if request.client else "unknown"
+    _limiter.check(
+        key=f"report-email:{client_ip}",
+        max_hits=5,
+        window_seconds=3600,
+    )

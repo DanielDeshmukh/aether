@@ -32,6 +32,7 @@ from app.services.report_generator import render_pdf_report  # noqa: E402
 from app.services.storage import ScanStorage  # noqa: E402
 from app.api.deps import get_current_user, check_scan_quota  # noqa: E402
 from app.api.shield import AetherShieldMiddleware  # noqa: E402
+from app.api.rate_limiter import rate_limit_scan_creation, rate_limit_report_download, rate_limit_report_email  # noqa: E402
 from app.tools.validators import is_safe_url  # noqa: E402
 
 env_path = Path(__file__).resolve().parents[2] / ".env"
@@ -578,6 +579,7 @@ async def create_scan(
     payload: ScanCreateRequest,
     request: Request,
     user_id: str = Depends(check_scan_quota),
+    _rate_limit: None = Depends(rate_limit_scan_creation),
 ):
     try:
         normalized_target = normalize_target(payload.target_url)
@@ -1260,7 +1262,7 @@ async def get_vulnerability_screenshot(scan_id: str, vuln_id: str, user_id: str 
 
 
 @app.get("/api/v1/scans/{scan_id}/report")
-async def download_scan_report(scan_id: str, user_id: str = Depends(get_current_user)):
+async def download_scan_report(scan_id: str, user_id: str = Depends(get_current_user), _rate_limit: None = Depends(rate_limit_report_download)):
     try:
         scan_storage.ensure_schema()
     except Exception:
@@ -1298,6 +1300,7 @@ async def email_scan_report(
     scan_id: str,
     payload: EmailReportRequest,
     user_id: str = Depends(get_current_user),
+    _rate_limit: None = Depends(rate_limit_report_email),
 ):
     """Send the PDF report via email."""
     try:
