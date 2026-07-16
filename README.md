@@ -2,11 +2,7 @@
 
 ![AETHER Banner](banner.png)
 
-# AETHER
-
-### Automated Ethical Testing & Heuristic Evaluation Routine
-
-**An autonomous penetration testing platform that reasons like a human security expert.**
+---
 
 [![Tests](https://img.shields.io/badge/tests-231%20passed-brightgreen?style=flat-square)](https://github.com/DanielDeshmukh/aether)
 [![Stars](https://img.shields.io/github/stars/DanielDeshmukh/aether?style=flat-square&color=yellow)](https://github.com/DanielDeshmukh/aether/stargazers)
