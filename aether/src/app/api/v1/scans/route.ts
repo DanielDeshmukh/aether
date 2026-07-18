@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
 }
 
 function spawnPythonScan(scanId: string, targetUrl: string, userId: string) {
-  const backendDir = path.resolve(process.cwd(), "..", "backend");
+  const backendDir = path.resolve(process.cwd(), "backend");
 
   const pythonProcess = spawn("python", [
     "-m", "app.api.headless_runner",

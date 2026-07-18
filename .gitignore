@@ -6,22 +6,20 @@
 
 # Dependencies & Build
 node_modules/
-frontend/node_modules/
+aether/node_modules/
+aether/.next/
 .venv/
-backend/venv/
+aether/backend/venv/
 venv/
 __pycache__/
 **/__pycache__/
 .pytest_cache/
-frontend/dist/
-frontend/test-results/
 dist/
 *.log
 
 # IDE
 .claude/
 .claude-flow/
-.sixth/
 .vscode/
 .idea/
 *.swp
@@ -34,4 +32,3 @@ Thumbs.db
 # Deployment artifacts
 *.pem
 *.key
-

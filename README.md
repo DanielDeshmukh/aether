@@ -9,8 +9,9 @@
 [![NVIDIA NIM](https://img.shields.io/badge/AI-NVIDIA%20NIM-76B900?style=flat-square&logo=nvidia)](https://build.nvidia.com)
 [![Live](https://img.shields.io/badge/Live-Deployed-00D4FF?style=flat-square)](https://aether-pentesting.netlify.app)
 [![License](https://img.shields.io/badge/License-Proprietary-FF4444?style=flat-square)](#license)
+[![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=flat-square&logo=next.js)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript)](https://typescriptlang.org)
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.136-009688?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com)
 
 ---
 
@@ -31,6 +32,37 @@ Target URL  -->  Recon  -->  AI Planning  -->  Exploit Execution  -->  Validatio
             fingerprint   generates attack    attack lanes with     breach with     copy-paste
             + passive     plan with THOUGHT   Playwright-backed     evidence        security
             recon         / OBSERVE / PLAN    active testing        + screenshots   patches
+```
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | Next.js 15, React 19, TypeScript, Tailwind CSS |
+| **Backend** | Python 3.12, Playwright, NVIDIA NIM (OpenAI-compatible API) |
+| **Database** | PostgreSQL 17, Prisma ORM |
+| **Auth** | Custom JWT with magic link authentication |
+| **AI Orchestration** | Nemotron 3 Super, Llama 3.3 Nemotron, DeepSeek V4 Flash |
+| **Browser Automation** | Playwright with headless Chromium |
+
+---
+
+## Project Structure
+
+```
+aether/
+├── src/app/            # Next.js App Router (pages + API routes)
+├── src/lib/            # Auth, DB, email, API utilities
+├── prisma/             # Database schema (10 tables)
+├── public/             # Static assets
+└── backend/            # Python scanning engine (subprocess)
+    └── app/
+        ├── orchestrator/   # Brain, attack orchestrator
+        ├── engine/         # Heuristic, Playwright, validation lanes
+        ├── tools/          # Audit, headers, scanner, validators
+        └── services/       # Storage, domain verification
 ```
 
 ---
@@ -64,100 +96,55 @@ AETHER uses a **multi-model NVIDIA NIM pipeline** for different stages of the as
 | **Llama 3.3 Nemotron Super 49B** | Remediation code generation | 91.3% MBPP score, optimized for security patch generation |
 | **Nemotron 3 Nano 30B** | Content safety filtering | Sub-second response for real-time safety gating |
 | **DeepSeek V4 Flash** | Fast fallback analysis | 284B MoE, ~120 tok/s for high-throughput scenarios |
-| **MiniMax M2.7** | Heavy reasoning fallback | 230B MoE, highest intelligence for complex verdicts |
-
-### Professional Remediation
-
-Every confirmed vulnerability generates a **production-ready security patch**:
-
-```python
-# BEFORE: Vulnerable Code
-cursor.execute(f"SELECT * FROM users WHERE email = '{user_email}'")
-
-# AFTER: Secure Refactor
-cursor.execute("SELECT * FROM users WHERE email = %s", (user_email,))
-```
-
-Remediations include Nginx, Apache, Node.js, Python, Docker, and Kubernetes configurations.
-
-### Real-Time Telemetry
-
-- **Live WebSocket stream** of the entire attack lifecycle
-- **Terminal-style console** showing payload delivery and server responses
-- **PDF report generation** with executive summary and technical findings
-- **Email delivery** of reports directly from the platform
 
 ---
 
 ## Safety Architecture
 
-AETHER is built with **safety-first principles**:
-
 | Control | Implementation |
 |---------|---------------|
-| **Mandatory Consent** | Scans require explicit ownership verification and breach consent before execution |
-| **AETHER-Shield** | HMAC-based safety middleware that validates every request with cryptographic tokens |
-| **Target Verification** | Domain ownership must be proven via DNS TXT records or HTTP tokens |
-| **SSRF Protection** | Private IPs, loopback, and internal networks are blocked before any request |
-| **Kill Switch** | Immediate termination of all active sessions with automated rollback |
-| **Rate Limiting** | Per-IP rate limits on scan creation (10/hr), report downloads (30/hr), and emails (5/hr) |
-| **Quota Enforcement** | Per-user scan quotas with tier-based limits (Free/Pro/Enterprise) |
-| **Non-Root Container** | Production Docker images run as unprivileged user |
-| **Token Rotation** | Refresh tokens are rotated on every use; all tokens include revocable JTIs |
+| **Mandatory Consent** | Scans require explicit ownership verification before execution |
+| **SSRF Protection** | Private IPs, loopback, and internal networks are blocked |
+| **Rate Limiting** | Per-IP rate limits on scan creation and API endpoints |
+| **Quota Enforcement** | Per-user scan quotas with tier-based limits |
+| **Token Rotation** | Refresh tokens rotated on every use; all tokens include revocable JTIs |
 
 ---
 
-## Tech Stack
+## Getting Started
 
-| Layer | Technology |
-|-------|-----------|
-| **Frontend** | React 19, Vite, React Router, Tailwind CSS |
-| **Backend** | FastAPI, Python 3.12, WebSockets |
-| **AI Orchestration** | NVIDIA NIM (OpenAI-compatible API) |
-| **Browser Automation** | Playwright with headless Chromium |
-| **Database** | PostgreSQL 15 with psycopg3 connection pooling |
-| **Auth** | Custom JWT with magic link + OAuth (Google/GitHub) |
-| **PDF Generation** | fpdf2 with Playwright-rendered evidence screenshots |
-| **Deployment** | Fly.io (backend), Netlify (frontend), Docker multi-stage build |
+### Prerequisites
+- Node.js 18+
+- Python 3.12+
+- PostgreSQL 17+
 
----
+### Setup
 
-## Security Features
+```bash
+# Clone
+git clone https://github.com/DanielDeshmukh/aether.git
+cd aether
 
-- **Magic Link Authentication** — Passwordless login via email
-- **OAuth 2.0** — Google and GitHub social login
-- **JWT with Rotation** — Access tokens (60min) + rotating refresh tokens (7 days)
-- **Token Revocation** — All tokens include JTIs; revoked on logout, compromise, or account deletion
-- **Tenant Isolation** — All data scoped to `user_id`; scan records, findings, and remediations are isolated
-- **Input Validation** — SSRF protection, URL normalization, Pydantic validation on all endpoints
-- **Security Headers** — HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
-- **Structured Logging** — Request/response logging with method, path, status, and timing
+# Install dependencies
+cd aether && npm install
+cd ../aether/backend && pip install -r requirements.txt
 
----
+# Set up environment
+cp .env.example .env
+# Edit .env with your values
 
-## API Reference
+# Run database migrations
+npx prisma db push
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/v1/scans` | POST | Create a new scan |
-| `/api/v1/scans` | GET | List all scans for authenticated user |
-| `/api/v1/scans/{id}` | GET | Get scan details |
-| `/api/v1/scans/{id}/report` | GET | Download PDF report |
-| `/api/v1/scans/{id}/report/email` | POST | Email PDF report |
-| `/ws/scan/{id}` | WS | Real-time scan telemetry |
-| `/ws/remediation/{id}` | WS | Remediation generation stream |
-| `/ws/dashboard` | WS | Dashboard live updates |
-| `/api/v1/auth/magic-link` | POST | Request magic link |
-| `/api/v1/auth/refresh` | POST | Refresh access token |
-| `/api/v1/health` | GET | Health check |
+# Start development
+npm run dev
+```
 
 ---
 
 ## License
 
 This project is proprietary software. All rights reserved by the author.
-
-Unauthorized reproduction, distribution, or modification is strictly prohibited.
 
 ---
 
