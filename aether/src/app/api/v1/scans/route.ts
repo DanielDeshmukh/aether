@@ -63,19 +63,18 @@ export async function POST(request: NextRequest) {
     create: { domain, userId },
   });
 
-  const fullId = crypto.randomUUID();
-  const scanId = fullId.slice(0, 8);
+  const scanId = crypto.randomUUID();
 
   await prisma.scan.create({
     data: {
-      id: fullId,
+      id: scanId,
       userId,
       targetUrl: normalizedTarget,
       status: "running",
     },
   });
 
-  spawnPythonScan(fullId, normalizedTarget, userId);
+  spawnPythonScan(scanId, normalizedTarget, userId);
 
   return apiSuccess({ scan_id: scanId, target_url: normalizedTarget });
 }

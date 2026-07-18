@@ -3,18 +3,11 @@ import { decodeToken } from "@/lib/auth";
 
 const PUBLIC_PATHS = [
   "/",
-  "/join-us",
-  "/security",
-  "/legal",
   "/auth/callback",
   "/api/v1/health",
   "/api/v1/auth/magic-link",
   "/api/v1/auth/verify",
   "/api/v1/auth/refresh",
-  "/api/v1/auth/google",
-  "/api/v1/auth/google/callback",
-  "/api/v1/auth/github",
-  "/api/v1/auth/github/callback",
 ];
 
 export function middleware(request: NextRequest) {
