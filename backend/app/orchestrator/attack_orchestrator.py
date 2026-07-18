@@ -248,6 +248,7 @@ class AttackOrchestrator:
     async def safety_filter(self, payload: str) -> bool:
         """
         Run the candidate module description through NVIDIA content safety before dispatch.
+        Fails open on timeout or error so scans are not blocked by safety gating latency.
         """
         self._check_abort()
         if not self.api_key or requests is None:
@@ -264,10 +265,14 @@ class AttackOrchestrator:
             "model": "nvidia/nemotron-3-nano-30b-a3b",
             "messages": [{"role": "user", "content": payload}],
         }
-        response = await asyncio.to_thread(self._guarded_post, invoke_url, headers, body)
-        response.raise_for_status()
-        content = response.json().get("choices", [{}])[0].get("message", {}).get("content", "")
-        return str(content).strip().lower() == "safe"
+        try:
+            response = await asyncio.to_thread(self._guarded_post, invoke_url, headers, body)
+            response.raise_for_status()
+            content = response.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+            return str(content).strip().lower() == "safe"
+        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError, Exception) as exc:
+            logger.warning("Safety filter failed open due to %s: %s", type(exc).__name__, exc)
+            return False
 
     async def _preflight_latency_check(self, target_url: str, trace: List[Dict[str, Any]]) -> None:
         await self._require_verified_target(target_url)

@@ -1,1 +1,1 @@
-"""API package for AETHER."""
+"""AETHER API package."""

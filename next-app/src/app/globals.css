@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: #050505;
+  --color-foreground: #ffffff;
+  --color-aether-black: #050505;
+  --color-aether-panel: #0d0d0d;
+  --color-aether-panel-2: #111111;
+  --color-aether-gold: #FFC107;
+  --color-aether-gold-deep: #917300;
+  --color-aether-ink: #f5f1df;
+  --color-aether-muted: #8f8a78;
+  --color-aether-line: rgba(212, 175, 55, 0.18);
+  --color-lambo-black: #000000;
+  --color-lambo-gold: #FFC107;
+  --color-lambo-gold-dark: #917300;
+  --color-lambo-white: #FFFFFF;
+  --color-lambo-charcoal: #202020;
+  --color-lambo-ash: #7D7D7D;
+  --color-lambo-cyan: #29ABE2;
+  --font-sans: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+body {
+  background-color: var(--color-aether-black);
+  color: #FFFFFF;
+  overflow-x: hidden;
+}
+
+.chamfer-panel {
+  clip-path: polygon(18px 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%, 0 18px);
+}
+
+.chamfer-button {
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+}
+
+.chamfer-badge {
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}

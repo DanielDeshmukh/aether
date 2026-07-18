@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id          String    @id @default(uuid()) @db.Uuid
+  email       String    @unique
+  name        String?
+  provider    String    @default("email")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  lastLoginAt DateTime? @map("last_login_at")
+
+  magicLinks      MagicLink[]
+  revokedTokens   RevokedToken[]
+  scans           Scan[]
+  consentLogs     ConsentLog[]
+  remediationHist RemediationHistory[]
+  targets         Target[]
+
+  @@map("users")
+}
+
+model MagicLink {
+  id        String   @id @default(uuid()) @db.Uuid
+  token     String   @unique
+  email     String
+  userId    String?  @map("user_id") @db.Uuid
+  expiresAt DateTime @map("expires_at")
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token], map: "magic_links_token_idx")
+  @@map("magic_links")
+}
+
+model RevokedToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  tokenJti  String   @unique @map("token_jti")
+  userId    String?  @map("user_id") @db.Uuid
+  revokedAt DateTime @default(now()) @map("revoked_at")
+  expiresAt DateTime @map("expires_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([tokenJti], map: "revoked_tokens_jti_idx")
+  @@index([userId], map: "revoked_tokens_user_idx")
+  @@map("revoked_tokens")
+}
+
+model Scan {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String?   @map("user_id") @db.Uuid
+  targetUrl    String    @map("target_url")
+  status       String    @default("pending")
+  threatLevel  String    @default("unknown") @map("threat_level")
+  initialPlan  Json      @default("{\"steps\":[]}") @map("initial_plan")
+  thoughtTrace Json?     @map("thought_trace")
+  results      Json      @default("{}")
+  finalReport  Json      @default("{}") @map("final_report")
+  remediations Json      @default("{}")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  completedAt  DateTime? @map("completed_at")
+
+  user               User?                @relation(fields: [userId], references: [id])
+  scanSessions       ScanSession[]
+  vulnerabilities    Vulnerability[]
+  profiles           Profile[]
+  remediationHistory RemediationHistory[]
+
+  @@map("scans")
+}
+
+model ScanSession {
+  id              String    @id @default(uuid()) @db.Uuid
+  scanId          String?   @map("scan_id") @db.Uuid
+  userId          String?   @map("user_id") @db.Uuid
+  targetUrl       String    @map("target_url")
+  status          String
+  threatLevel     String?   @map("threat_level")
+  scanStartedAt   DateTime  @default(now()) @map("scan_started_at")
+  scanCompletedAt DateTime? @map("scan_completed_at")
+
+  scan Scan? @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([scanId], map: "scan_sessions_scan_id_idx")
+  @@map("scan_sessions")
+}
+
+model Vulnerability {
+  id               String   @id @db.Text
+  userId           String?  @map("user_id") @db.Uuid
+  scanId           String   @map("scan_id") @db.Uuid
+  sessionId        String?  @map("session_id") @db.Uuid
+  attackVector     String?  @map("attack_vector")
+  detectedThreat   String?  @map("detected_threat")
+  evidenceSnippet  String?  @map("evidence_snippet")
+  providedSolution String?  @map("provided_solution")
+  isFixed          Boolean  @default(false) @map("is_fixed")
+  category         String
+  title            String
+  severity         String
+  detail           String
+  evidence         Json     @default("{}")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  scan Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([scanId], map: "vulnerabilities_scan_id_idx")
+  @@map("vulnerabilities")
+}
+
+model Profile {
+  id          String   @id @default(uuid()) @db.Uuid
+  scanId      String   @map("scan_id") @db.Uuid
+  userId      String?  @map("user_id") @db.Uuid
+  email       String?
+  profileType String   @map("profile_type")
+  label       String
+  summary     String
+  details     Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  scan Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([scanId], map: "profiles_scan_id_idx")
+  @@map("profiles")
+}
+
+model ConsentLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String?  @map("user_id") @db.Uuid
+  targetUrl   String   @map("target_url")
+  confirmedAt DateTime @default(now()) @map("confirmed_at")
+  ipAddress   String?  @map("ip_address")
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@map("consent_logs")
+}
+
+model RemediationHistory {
+  id        String   @id @default(uuid()) @db.Uuid
+  scanId    String?  @map("scan_id") @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  vulnId    String?  @map("vuln_id")
+  action    String
+  language  String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  scan Scan? @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([scanId], map: "remediation_history_scan_idx")
+  @@map("remediation_history")
+}
+
+model Target {
+  id            String    @id @default(uuid()) @db.Uuid
+  domain        String    @unique
+  userId        String?   @map("user_id") @db.Uuid
+  isVerified    Boolean   @default(false) @map("is_verified")
+  gitProvider   String?   @map("git_provider")
+  accessToken   String?   @map("access_token")
+  repository    String?
+  projectId     String?   @map("project_id")
+  defaultBranch String?   @map("default_branch")
+  baseBranch    String?   @map("base_branch")
+  apiBaseUrl    String?   @map("api_base_url")
+  repoWebUrl    String?   @map("repo_web_url")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime? @map("updated_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("targets")
+}

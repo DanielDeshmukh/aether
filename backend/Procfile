@@ -1,1 +1,0 @@
-web: cd /app && alembic upgrade head && gunicorn app.api.main:app -k uvicorn.workers.UvicornWorker --timeout 120
