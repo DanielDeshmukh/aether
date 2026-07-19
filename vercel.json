@@ -1,0 +1,23 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd aether && npm install && npx prisma generate && npx next build",
+  "outputDirectory": "aether/.next",
+  "framework": "nextjs",
+  "installCommand": "cd aether && npm install",
+  "env": {
+    "DATABASE_URL": "@database-url",
+    "AETHER_JWT_SECRET": "@jwt-secret",
+    "NVIDIA_API_KEY": "@nvidia-api-key",
+    "FRONTEND_URL": "@frontend-url"
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,PUT,DELETE,OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
+      ]
+    }
+  ]
+}

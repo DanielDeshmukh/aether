@@ -1,0 +1,39 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: aether
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/aether
+      AETHER_JWT_SECRET: ${AETHER_JWT_SECRET:-dev-secret-change-in-production}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      AETHER_USE_NVIDIA_ORCHESTRATOR: "true"
+      AETHER_VALIDATION_HOSTS: ${AETHER_VALIDATION_HOSTS:-}
+      FRONTEND_URL: http://localhost:3000
+      ENVIRONMENT: development
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

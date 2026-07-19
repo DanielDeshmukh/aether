@@ -32,3 +32,6 @@ Thumbs.db
 # Deployment artifacts
 *.pem
 *.key
+
+# Docker
+aether/.next/

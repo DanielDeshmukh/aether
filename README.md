@@ -4,10 +4,10 @@
 
 ---
 
-[![Tests](https://img.shields.io/badge/tests-231%20passed-brightgreen?style=flat-square)](https://github.com/DanielDeshmukh/aether)
+[![CI](https://github.com/DanielDeshmukh/aether/actions/workflows/ci.yml/badge.svg)](https://github.com/DanielDeshmukh/aether/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-99%20passed-brightgreen?style=flat-square)](https://github.com/DanielDeshmukh/aether)
 [![Stars](https://img.shields.io/github/stars/DanielDeshmukh/aether?style=flat-square&color=yellow)](https://github.com/DanielDeshmukh/aether/stargazers)
 [![NVIDIA NIM](https://img.shields.io/badge/AI-NVIDIA%20NIM-76B900?style=flat-square&logo=nvidia)](https://build.nvidia.com)
-[![Live](https://img.shields.io/badge/Live-Deployed-00D4FF?style=flat-square)](https://aether-pentesting.netlify.app)
 [![License](https://img.shields.io/badge/License-Proprietary-FF4444?style=flat-square)](#license)
 [![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=flat-square&logo=next.js)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript)](https://typescriptlang.org)
@@ -67,6 +67,72 @@ aether/
 
 ---
 
+## Getting Started
+
+### Prerequisites
+- Node.js 18+
+- Python 3.12+
+- PostgreSQL 17+
+
+### Setup
+
+```bash
+# Clone
+git clone https://github.com/DanielDeshmukh/aether.git
+cd aether
+
+# Install dependencies
+cd aether && npm install
+cd ../aether/backend && pip install -r requirements.txt
+
+# Set up environment
+cp .env.example .env
+# Edit .env with your DATABASE_URL, NVIDIA_API_KEY, AETHER_JWT_SECRET
+
+# Sync database schema
+cd ../aether
+npx prisma db push
+
+# Start development
+cd ../aether && npm run dev
+```
+
+Open http://localhost:3000
+
+### Docker (Full Stack)
+
+```bash
+docker compose up --build
+```
+
+This starts PostgreSQL + the Next.js app with the Python scanning engine.
+
+---
+
+## Deployment
+
+### Option 1: Railway / Fly.io (Full Functionality)
+
+The scan engine requires a Python subprocess, so **full functionality needs a server environment**.
+
+```bash
+# Railway
+railway init
+railway add --database postgres
+railway variables set NVIDIA_API_KEY=... AETHER_JWT_SECRET=... AETHER_USE_NVIDIA_ORCHESTRATOR=true
+railway up
+```
+
+### Option 2: Vercel (UI Only)
+
+The Next.js app deploys to Vercel. Scans won't execute (serverless can't spawn Python), but the UI, auth, and dashboard work.
+
+```bash
+vercel deploy
+```
+
+---
+
 ## Core Capabilities
 
 ### Autonomous Exploit Execution
@@ -87,8 +153,6 @@ AETHER executes **all 10 OWASP Top 10** categories autonomously once consent is 
 | **A10: SSRF** | Server-side request forgery, internal network probing |
 
 ### AI-Powered Reasoning
-
-AETHER uses a **multi-model NVIDIA NIM pipeline** for different stages of the assessment:
 
 | Model | Role | Why |
 |-------|------|-----|
@@ -111,37 +175,6 @@ AETHER uses a **multi-model NVIDIA NIM pipeline** for different stages of the as
 
 ---
 
-## Getting Started
-
-### Prerequisites
-- Node.js 18+
-- Python 3.12+
-- PostgreSQL 17+
-
-### Setup
-
-```bash
-# Clone
-git clone https://github.com/DanielDeshmukh/aether.git
-cd aether
-
-# Install dependencies
-cd aether && npm install
-cd ../aether/backend && pip install -r requirements.txt
-
-# Set up environment
-cp .env.example .env
-# Edit .env with your values
-
-# Run database migrations
-npx prisma db push
-
-# Start development
-npm run dev
-```
-
----
-
 ## License
 
 This project is proprietary software. All rights reserved by the author.
@@ -152,6 +185,6 @@ This project is proprietary software. All rights reserved by the author.
 
 **Built with precision. Deployed with confidence.**
 
-[AETHER Live Demo](https://aether-pentesting.netlify.app) · [Report Issues](https://github.com/DanielDeshmukh/aether/issues)
+[Report Issues](https://github.com/DanielDeshmukh/aether/issues)
 
 </div>
