@@ -2,8 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { apiSuccess, apiError } from "@/lib/api-utils";
 import crypto from "crypto";
-import { spawn } from "child_process";
-import path from "path";
+import { executeScan } from "@/lib/scanner";
 
 export async function GET(request: NextRequest) {
   const userId = request.headers.get("x-user-id");
@@ -42,10 +41,6 @@ export async function POST(request: NextRequest) {
     return apiError("Forbidden target: Internal or private network scanning is not allowed.");
   }
 
-  if (process.env.VERCEL) {
-    return apiError("Scanning engine is not available on Vercel. Deploy the Python backend separately to enable scans.", 501);
-  }
-
   const scanCount = await prisma.scan.count({ where: { userId } });
   const limit = parseInt(process.env.QUOTA_FREE_LIMIT || "3");
   if (scanCount >= limit) {
@@ -78,62 +73,23 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  spawnPythonScan(scanId, normalizedTarget, userId);
+  executeScanInBackground(scanId, normalizedTarget, userId);
 
   return apiSuccess({ scan_id: scanId, target_url: normalizedTarget });
 }
 
-function spawnPythonScan(scanId: string, targetUrl: string, userId: string) {
-  const backendDir = path.resolve(process.cwd(), "backend");
+function executeScanInBackground(scanId: string, targetUrl: string, userId: string) {
+  const onEvent = async (event: Record<string, unknown>) => {
+    console.log(`[scan:${scanId}] ${event.phase || "unknown"}: ${event.msg || JSON.stringify(event)}`);
+  };
 
-  const pythonProcess = spawn("python", [
-    "-m", "app.api.headless_runner",
-    "--scan-id", scanId,
-    "--target-url", targetUrl,
-    "--user-id", userId,
-  ], {
-    cwd: backendDir,
-    env: {
-      ...process.env,
-      DATABASE_URL: process.env.DATABASE_URL!,
-      NVIDIA_API_KEY: process.env.NVIDIA_API_KEY!,
-      AETHER_JWT_SECRET: process.env.AETHER_JWT_SECRET!,
-      AETHER_USE_NVIDIA_ORCHESTRATOR: "true",
-      AETHER_VALIDATION_HOSTS: process.env.AETHER_VALIDATION_HOSTS || "",
-    },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-
-  pythonProcess.stdout?.on("data", (data) => {
-    console.log(`[scan:${scanId}] ${data.toString().trim()}`);
-  });
-
-  pythonProcess.stderr?.on("data", (data) => {
-    console.error(`[scan:${scanId}:err] ${data.toString().trim()}`);
-  });
-
-  pythonProcess.on("close", async (code) => {
-    console.log(`[scan:${scanId}] Process exited with code ${code}`);
-    try {
-      const status = code === 0 ? "completed" : "failed";
-      await prisma.scan.update({
-        where: { id: scanId },
-        data: { status, completedAt: new Date() },
-      });
-    } catch (err) {
-      console.error(`[scan:${scanId}] Failed to update status:`, err);
-    }
-  });
-
-  pythonProcess.on("error", async (err) => {
-    console.error(`[scan:${scanId}] Spawn error:`, err);
-    try {
-      await prisma.scan.update({
-        where: { id: scanId },
-        data: { status: "failed", completedAt: new Date() },
-      });
-    } catch { /* ignore */ }
-  });
+  executeScan({ scanId, targetUrl, userId, onEvent })
+    .then((result) => {
+      console.log(`[scan:${scanId}] Scan finished: ${result.status}`);
+    })
+    .catch((err) => {
+      console.error(`[scan:${scanId}] Background scan error:`, err);
+    });
 }
 
 function normalizeTarget(url: string): string | null {
