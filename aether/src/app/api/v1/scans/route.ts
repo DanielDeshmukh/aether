@@ -42,6 +42,10 @@ export async function POST(request: NextRequest) {
     return apiError("Forbidden target: Internal or private network scanning is not allowed.");
   }
 
+  if (process.env.VERCEL) {
+    return apiError("Scanning engine is not available on Vercel. Deploy the Python backend separately to enable scans.", 501);
+  }
+
   const scanCount = await prisma.scan.count({ where: { userId } });
   const limit = parseInt(process.env.QUOTA_FREE_LIMIT || "3");
   if (scanCount >= limit) {
