@@ -43,6 +43,17 @@ class TestScanStorageGitTargetMethods(unittest.TestCase):
     def setUp(self):
         self.storage = ScanStorage()
         self.user_id = str(uuid.uuid4())
+        if _HAS_DB:
+            try:
+                with self.storage.get_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "INSERT INTO users (id, email, provider, created_at) VALUES (%s, %s, 'email', NOW()) ON CONFLICT DO NOTHING",
+                            (self.user_id, f"test_{uuid.uuid4().hex[:8]}@test.com"),
+                        )
+                        conn.commit()
+            except Exception:
+                pass
 
     def _create_target(self, domain: str) -> str:
         unique = f"{uuid.uuid4().hex[:8]}.{domain}"
