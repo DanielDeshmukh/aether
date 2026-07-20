@@ -29,23 +29,25 @@ export async function GET(request: NextRequest) {
     return apiError("Token expired", 410);
   }
 
+  if (!magicLink.userId) {
+    return apiError("Invalid token", 400);
+  }
+
   await prisma.magicLink.update({
     where: { id: magicLink.id },
     data: { used: true },
   });
 
   await prisma.user.update({
-    where: { id: magicLink.userId! },
+    where: { id: magicLink.userId },
     data: { lastLoginAt: new Date() },
   });
 
-  const accessToken = createAccessToken(magicLink.userId!, magicLink.email);
-  const refreshToken = createRefreshToken(magicLink.userId!);
+  const accessToken = createAccessToken(magicLink.userId, magicLink.email);
+  const refreshToken = createRefreshToken(magicLink.userId);
 
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
   const redirectUrl = new URL("/home", frontendUrl);
-  redirectUrl.searchParams.set("access_token", accessToken);
-  redirectUrl.searchParams.set("refresh_token", refreshToken);
 
   const response = NextResponse.redirect(redirectUrl);
   response.cookies.set("access_token", accessToken, {

@@ -33,10 +33,14 @@ export async function POST(
     {
       id: vulnerability.id,
       title: vulnerability.title,
-      severity: vulnerability.severity,
+      severity: vulnerability.severity as "Critical" | "High" | "Medium" | "Low",
       category: vulnerability.category,
-      detail: vulnerability.detail ?? undefined,
-      detectedThreat: vulnerability.detectedThreat ?? undefined,
+      detail: vulnerability.detail ?? "",
+      attack_vector: vulnerability.attackVector ?? "",
+      detected_threat: vulnerability.detectedThreat ?? "",
+      evidence_snippet: "",
+      provided_solution: "",
+      evidence: (vulnerability.evidence as Record<string, unknown>) ?? {},
     },
     results
   );
