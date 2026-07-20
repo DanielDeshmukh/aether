@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { buildWsUrl, apiRequest } from "@/lib/api-client";
+import { apiRequest } from "@/lib/api-client";
 
 function normalizePlan(initialPlan: unknown): Array<Record<string, unknown>> {
   if (typeof initialPlan === "string") { try { return normalizePlan(JSON.parse(initialPlan)); } catch { return []; } }
@@ -101,24 +101,23 @@ export default function ScanDetailPage() {
   const handleRemediate = async (vulnId: string) => {
     setLoadingFixId(vulnId);
     setRemediationError("");
-    const token = document.cookie.match(/(?:^|;\s*)access_token=([^;]*)/)?.[1] ?? "";
-    const socket = new WebSocket(buildWsUrl(`/ws/remediation/${scanId}?user_id=placeholder`));
-    socket.onopen = () => socket.send(JSON.stringify({ action: "generate_fix", vuln_id: vulnId }));
-    socket.onmessage = (event) => {
-      const payload = JSON.parse(event.data);
-      if (payload.type === "error") { setRemediationError(payload.msg ?? "REMEDIATION REQUEST FAILED."); setLoadingFixId(""); socket.close(); return; }
+    try {
+      const response = await apiRequest(`/api/v1/scans/${scanId}/remediate`, {
+        method: "POST",
+        body: JSON.stringify({ vuln_id: vulnId }),
+      });
+      const payload = await response.json();
       if (payload.remediation) {
         setScan((current) => ({
           ...current,
-          final_report: payload.final_report ?? current?.final_report,
           remediations: { ...(current?.remediations as Record<string, unknown> ?? {}), [vulnId]: payload.remediation },
         }));
       }
-      setLoadingFixId("");
-      setTimeout(refetchScan, 1500);
-      socket.close();
-    };
-    socket.onerror = () => { setRemediationError("REMEDIATION SOCKET FAILED."); setLoadingFixId(""); socket.close(); };
+    } catch (err) {
+      setRemediationError(err instanceof Error ? err.message : "REMEDIATION REQUEST FAILED.");
+    }
+    setLoadingFixId("");
+    setTimeout(refetchScan, 1500);
   };
 
   const handleCreatePullRequest = async (vulnId: string) => {
@@ -126,18 +125,24 @@ export default function ScanDetailPage() {
     setLoadingPrId(vulnId);
     setGitPushStatus("");
     setRemediationError("");
-    const socket = new WebSocket(buildWsUrl(`/ws/remediation/${scanId}?user_id=placeholder`));
-    socket.onopen = () => socket.send(JSON.stringify({ action: "create_pull_request", vuln_id: vulnId, target_id: autoRemediation.target_id }));
-    socket.onmessage = (event) => {
-      const payload = JSON.parse(event.data);
-      if (payload.type === "error") { setRemediationError(payload.msg ?? "PULL REQUEST CREATION FAILED."); setLoadingPrId(""); socket.close(); return; }
-      if (payload.type === "git_push_status") {
-        setGitPushStatus(payload.msg ?? "");
-        if (payload.status === "success") { setScan((current) => ({ ...current, final_report: payload.final_report ?? current?.final_report })); setLoadingPrId(""); socket.close(); return; }
-        if (payload.status === "error") { setRemediationError(payload.msg ?? "PR CREATION FAILED."); setLoadingPrId(""); socket.close(); }
+    try {
+      const response = await apiRequest(`/api/v1/scans/${scanId}/pull-request`, {
+        method: "POST",
+        body: JSON.stringify({ vuln_id: vulnId, target_id: autoRemediation.target_id }),
+      });
+      const payload = await response.json();
+      setGitPushStatus(payload.msg ?? "");
+      if (payload.remediation) {
+        setScan((current) => ({
+          ...current,
+          remediations: { ...(current?.remediations as Record<string, unknown> ?? {}), [vulnId]: payload.remediation },
+        }));
       }
-    };
-    socket.onerror = () => { setRemediationError("GIT SOCKET FAILED."); setLoadingPrId(""); socket.close(); };
+    } catch (err) {
+      setRemediationError(err instanceof Error ? err.message : "PR CREATION FAILED.");
+    }
+    setLoadingPrId("");
+    setTimeout(refetchScan, 1500);
   };
 
   const handleCopy = async (vulnId: string, code: string) => {
