@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
-import { buildWsUrl } from "@/lib/api-client";
+import { buildApiUrl } from "@/lib/api-client";
 
 const statusLabels: Record<string, string> = {
   idle: "Standby",
@@ -22,7 +22,6 @@ interface LogEntry {
   attack_vector?: string;
   evidence_snippet?: string;
   provided_solution?: string;
-  brain?: { status?: string; requires_operator?: boolean; resume_reason?: string };
 }
 
 interface ScanningConsoleProps {
@@ -33,47 +32,86 @@ interface ScanningConsoleProps {
 export default function ScanningConsole({ scanSession, className = "" }: ScanningConsoleProps) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [status, setStatus] = useState("idle");
-  const [brainState, setBrainState] = useState<LogEntry["brain"] | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const socketRef = useRef<WebSocket | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
   const prevScanIdRef = useRef<string | undefined>(undefined);
 
+  const cleanup = useCallback(() => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
-    if (!scanSession?.scan_id) return undefined;
+    if (!scanSession?.scan_id) {
+      cleanup();
+      return undefined;
+    }
 
     if (prevScanIdRef.current !== scanSession.scan_id) {
       prevScanIdRef.current = scanSession.scan_id;
-      setLogs([{ type: "thought", phase: "thought", msg: `Thought: Mission file accepted for ${scanSession.target_url}. Initializing Aether reasoning stack.` }]);
-      setBrainState(null);
+      setLogs([
+        { type: "thought", phase: "thought", msg: `Thought: Mission file accepted for ${scanSession.target_url}. Initializing Aether reasoning stack.` },
+      ]);
       setStatus("connecting");
     }
 
-    socketRef.current = new WebSocket(buildWsUrl(`/ws/scan/${scanSession.scan_id}`));
+    const token = document.cookie.match(/(?:^|;\s*)access_token=([^;]*)/)?.[1] ?? "";
+    const sseUrl = buildApiUrl(`/api/v1/scans/${scanSession.scan_id}/progress`);
+    const url = token ? `${sseUrl}?token=${token}` : sseUrl;
 
-    socketRef.current.onopen = () => setStatus("scanning");
+    const es = new EventSource(url);
+    eventSourceRef.current = es;
 
-    socketRef.current.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      setLogs((prev) => [...prev, data]);
-      if (data.brain) setBrainState(data.brain);
-      if (data.phase === "analyze") setStatus("analyzing");
-      if (data.msg?.includes("COMPLETE")) setStatus("completed");
-      if (data.phase === "plan" && data.brain?.status === "paused") setStatus("paused");
-      if (data.brain?.status === "failed") setStatus("failed");
-      if (data.msg?.includes("TERMINATED")) setStatus("terminated");
+    es.addEventListener("progress", (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        const scanStatus = data.status?.toLowerCase() ?? "";
+
+        if (scanStatus === "running" || scanStatus === "active" || scanStatus === "in_progress") {
+          setStatus("scanning");
+          setLogs((prev) => {
+            const lastLog = prev[prev.length - 1];
+            const progressMsg = `Engine active — scanning ${scanSession.target_url}...`;
+            if (lastLog?.msg === progressMsg) return prev;
+            return [...prev, { type: "system", phase: "scan", msg: progressMsg }];
+          });
+        } else if (scanStatus === "completed") {
+          setStatus("completed");
+        } else if (scanStatus === "failed") {
+          setStatus("failed");
+          setLogs((prev) => [...prev, { type: "error", msg: "Scan engine reported failure." }]);
+        } else if (scanStatus === "paused") {
+          setStatus("paused");
+          setLogs((prev) => [...prev, { type: "system", phase: "plan", msg: "Scan paused by operator." }]);
+        } else if (scanStatus === "terminated") {
+          setStatus("terminated");
+          setLogs((prev) => [...prev, { type: "error", msg: "Scan terminated." }]);
+        }
+      } catch { /* ignore parse errors */ }
+    });
+
+    es.addEventListener("complete", (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.status === "completed") {
+          setStatus("completed");
+          setLogs((prev) => [...prev, { type: "system", phase: "complete", msg: "SCAN COMPLETE — All phases finished." }]);
+        } else if (data.status === "failed") {
+          setStatus("failed");
+        }
+      } catch { /* ignore */ }
+      es.close();
+    });
+
+    es.onerror = () => {
+      setStatus((prev) => (prev === "terminated" || prev === "failed" ? prev : "completed"));
+      es.close();
     };
 
-    socketRef.current.onerror = () => {
-      setLogs((prev) => [...prev, { type: "error", msg: "Websocket connection failure." }]);
-      setStatus("terminated");
-    };
-
-    socketRef.current.onclose = () => {
-      setStatus((currentStatus) => (currentStatus === "terminated" || currentStatus === "failed" ? currentStatus : "completed"));
-    };
-
-    return () => { socketRef.current?.close(); };
-  }, [scanSession]);
+    return cleanup;
+  }, [scanSession, cleanup]);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -84,12 +122,7 @@ export default function ScanningConsole({ scanSession, className = "" }: Scannin
     setStatus("terminated");
     try { await fetch(`/api/v1/scan/kill/${scanSession.scan_id}`, { method: "POST" }); } catch { /* ignore */ }
     setLogs((prev) => [...prev, { type: "error", msg: "!!! Emergency termination executed by operator !!!" }]);
-    socketRef.current?.close();
-  };
-
-  const sendPlanSignal = (action: string, reason: string) => {
-    if (socketRef.current?.readyState !== WebSocket.OPEN) return;
-    socketRef.current.send(JSON.stringify({ action, reason }));
+    cleanup();
   };
 
   return (
@@ -106,18 +139,6 @@ export default function ScanningConsole({ scanSession, className = "" }: Scannin
             Mode: <span className="text-lambo-gold">{statusLabels[status]}</span>
           </div>
         </div>
-
-        {brainState?.requires_operator && (
-          <div className="border-b border-white/10 bg-lambo-gold/10 px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-[9px] text-lambo-gold uppercase tracking-[0.35em]">// Plan Hold</p>
-              <p className="text-[10px] text-lambo-white tracking-[0.18em]">{brainState.resume_reason || "Operator review required"}</p>
-            </div>
-            <button onClick={() => sendPlanSignal("resume", "Operator cleared the plan window.")} className="border border-lambo-gold bg-lambo-gold px-4 py-3 text-[10px] sm:text-xs font-bold tracking-[0.15em] text-black transition-colors hover:bg-[#917300]">
-              Resume Reasoning
-            </button>
-          </div>
-        )}
 
         <div ref={scrollRef} className="h-80 overflow-y-auto p-6 space-y-2 bg-black/50 scrollbar-thin scrollbar-thumb-lambo-gold/20 scroll-smooth">
           {!scanSession && <div className="text-[11px] tracking-[0.15em] text-lambo-ash">Awaiting a target authorization to start the engine loop.</div>}
