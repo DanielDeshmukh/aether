@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import WebSocketStatus from "@/components/WebSocketStatus";
 import ScanChart from "@/components/ScanChart";
-import { buildWsUrl, apiRequest } from "@/lib/api-client";
+import { buildApiUrl, apiRequest } from "@/lib/api-client";
 
 const PAGE_SIZE = 9;
 
@@ -69,7 +69,7 @@ export default function DashboardPage() {
   const [wsConnected, setWsConnected] = useState(false);
   const [wsReconnecting, setWsReconnecting] = useState(false);
   const router = useRouter();
-  const wsRef = useRef<WebSocket | null>(null);
+  const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -90,39 +90,38 @@ export default function DashboardPage() {
     };
     loadScans();
 
-    const connectDashboardWs = () => {
+    const connectDashboardSse = () => {
       if (typeof window === "undefined") return;
       const token = document.cookie.match(/(?:^|;\s*)access_token=([^;]*)/)?.[1];
       if (!token) return;
 
       setWsReconnecting(true);
-      const ws = new WebSocket(buildWsUrl(`/ws/dashboard?token=${token}`));
-      wsRef.current = ws;
+      const url = `${buildApiUrl("/api/v1/scans/live")}?token=${token}`;
+      const es = new EventSource(url);
+      esRef.current = es;
 
-      ws.onopen = () => { if (isMounted) { setWsConnected(true); setWsReconnecting(false); } };
-
-      ws.onmessage = (event) => {
+      es.addEventListener("scan_update", (event) => {
         if (!isMounted) return;
         try {
           const payload = JSON.parse(event.data);
-          if (payload.type === "scan_update" && payload.scan) {
+          if (payload.scan) {
             const nextRecord = payload.scan;
             setScans((current) => {
               const filtered = current.filter((scan) => scan.id !== nextRecord.id);
               return [nextRecord, ...filtered];
             });
           }
-        } catch { console.error("Failed to parse WebSocket message"); }
-      };
+        } catch { console.error("Failed to parse SSE message"); }
+      });
 
-      ws.onclose = () => { if (isMounted) { setWsConnected(false); setTimeout(connectDashboardWs, 3000); } };
-      ws.onerror = () => { if (isMounted) setWsConnected(false); ws.close(); };
+      es.onopen = () => { if (isMounted) { setWsConnected(true); setWsReconnecting(false); } };
+      es.onerror = () => { if (isMounted) { setWsConnected(false); es.close(); setTimeout(connectDashboardSse, 5000); } };
     };
 
-    connectDashboardWs();
+    connectDashboardSse();
     return () => {
       isMounted = false;
-      if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); }
+      if (esRef.current) esRef.current.close();
     };
   }, []);
 
@@ -148,7 +147,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#050505] font-lambo text-white">
-      <WebSocketStatus isConnected={wsConnected} isReconnecting={wsReconnecting} onRetry={() => { if (wsRef.current) wsRef.current.close(); }} />
+      <WebSocketStatus         isConnected={wsConnected} isReconnecting={wsReconnecting} onRetry={() => { if (esRef.current) esRef.current.close(); }} />
       <main className="relative overflow-hidden px-5 pb-16 pt-24 md:px-10 md:pt-28">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,193,7,0.05),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_22%)]" />
         <div className="absolute left-0 top-0 h-full w-full bg-[linear-gradient(135deg,transparent_0%,transparent_48%,rgba(255,193,7,0.02)_48%,rgba(255,193,7,0.02)_49%,transparent_49%,transparent_100%)] opacity-30" />
