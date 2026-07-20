@@ -3,6 +3,9 @@ import { decodeToken } from "@/lib/auth";
 
 const PUBLIC_PATHS = [
   "/",
+  "/join-us",
+  "/security",
+  "/legal",
   "/auth/callback",
   "/api/v1/health",
   "/api/v1/auth/magic-link",
