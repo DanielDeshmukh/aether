@@ -1,7 +1,17 @@
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 
-const JWT_SECRET = process.env.AETHER_JWT_SECRET || "dev_secret";
+const JWT_SECRET = (() => {
+  const secret = process.env.AETHER_JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("AETHER_JWT_SECRET is required in production");
+    }
+    console.warn("WARNING: AETHER_JWT_SECRET not set, using dev_secret");
+    return "dev_secret";
+  }
+  return secret;
+})();
 
 export interface TokenPayload {
   sub: string;

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { generateMagicLinkToken, hashToken } from "@/lib/auth";
 import { apiSuccess, apiError } from "@/lib/api-utils";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -12,6 +13,11 @@ export async function POST(request: NextRequest) {
   }
 
   const normalizedEmail = email.toLowerCase().trim();
+
+  const { allowed, retryAfterMs } = checkRateLimit(`magic-link:${normalizedEmail}`, 3, 15 * 60 * 1000);
+  if (!allowed) {
+    return apiError(`Too many requests. Try again in ${Math.ceil(retryAfterMs / 60000)} minutes.`, 429);
+  }
 
   const user = await prisma.user.upsert({
     where: { email: normalizedEmail },

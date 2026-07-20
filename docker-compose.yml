@@ -1,8 +1,6 @@
-version: "3.8"
-
 services:
-  db:
-    image: postgres:17
+  postgres:
+    image: postgres:17-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -11,29 +9,42 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    ports:
+      - "4000:4000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/aether
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY}
+      AETHER_USE_NVIDIA_ORCHESTRATOR: "true"
+      AETHER_JWT_SECRET: ${AETHER_JWT_SECRET}
+      WORKER_PORT: "4000"
+    depends_on:
+      - postgres
+    restart: unless-stopped
 
   app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.app
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/aether
-      AETHER_JWT_SECRET: ${AETHER_JWT_SECRET:-dev-secret-change-in-production}
-      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/aether
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY}
+      AETHER_JWT_SECRET: ${AETHER_JWT_SECRET}
       AETHER_USE_NVIDIA_ORCHESTRATOR: "true"
-      AETHER_VALIDATION_HOSTS: ${AETHER_VALIDATION_HOSTS:-}
       FRONTEND_URL: http://localhost:3000
-      ENVIRONMENT: development
+      WORKER_URL: http://worker:4000
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      EMAIL_FROM: ${EMAIL_FROM}
     depends_on:
-      db:
-        condition: service_healthy
+      - postgres
+      - worker
+    restart: unless-stopped
 
 volumes:
   pgdata:

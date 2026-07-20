@@ -2,7 +2,6 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { apiSuccess, apiError } from "@/lib/api-utils";
 import crypto from "crypto";
-import { executeScan } from "@/lib/scanner";
 
 export async function GET(request: NextRequest) {
   const userId = request.headers.get("x-user-id");
@@ -79,16 +78,33 @@ export async function POST(request: NextRequest) {
 }
 
 function executeScanInBackground(scanId: string, targetUrl: string, userId: string) {
-  const onEvent = async (event: Record<string, unknown>) => {
-    console.log(`[scan:${scanId}] ${event.phase || "unknown"}: ${event.msg || JSON.stringify(event)}`);
-  };
+  const workerUrl = process.env.WORKER_URL || "http://localhost:4000";
 
-  executeScan({ scanId, targetUrl, userId, onEvent })
-    .then((result) => {
-      console.log(`[scan:${scanId}] Scan finished: ${result.status}`);
+  fetch(`${workerUrl}/scan`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scanId, targetUrl, userId }),
+  })
+    .then((res) => {
+      if (!res.ok) {
+        console.error(`[scan:${scanId}] Worker returned ${res.status}`);
+        return prisma.scan.update({
+          where: { id: scanId },
+          data: { status: "failed", completedAt: new Date(), threatLevel: "critical",
+            finalReport: { threat_level: "critical", risk_impact: "Worker unavailable", remediation_steps: ["Ensure scan worker is running."] },
+          },
+        });
+      }
+      console.log(`[scan:${scanId}] Dispatched to worker`);
     })
     .catch((err) => {
-      console.error(`[scan:${scanId}] Background scan error:`, err);
+      console.error(`[scan:${scanId}] Worker dispatch failed:`, err);
+      prisma.scan.update({
+        where: { id: scanId },
+        data: { status: "failed", completedAt: new Date(), threatLevel: "critical",
+          finalReport: { threat_level: "critical", risk_impact: `Worker unreachable: ${err.message}`, remediation_steps: ["Ensure scan worker is running on port 4000."] },
+        },
+      }).catch(() => {});
     });
 }
 
