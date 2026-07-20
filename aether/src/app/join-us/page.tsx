@@ -54,9 +54,10 @@ export default function JoinUsPage() {
         </div>
 
         <div className="bg-[#0c0c0d] border border-lambo-charcoal/30 p-8 rounded-2xl shadow-2xl">
-          <button onClick={handleGoogleSignIn} className="w-full flex items-center justify-center gap-3 bg-transparent border border-lambo-charcoal/50 hover:border-lambo-gold/50 py-4 rounded-xl transition-all duration-300 group">
+          <button disabled className="w-full flex items-center justify-center gap-3 bg-transparent border border-lambo-charcoal/30 py-4 rounded-xl opacity-40 cursor-not-allowed">
             <FcGoogle className="text-2xl" />
-            <span className="text-lambo-white text-xs font-bold uppercase tracking-widest group-hover:text-lambo-gold">Continue with Google</span>
+            <span className="text-lambo-ash text-xs font-bold uppercase tracking-widest">Continue with Google</span>
+            <span className="text-[8px] text-lambo-gold ml-1">COMING SOON</span>
           </button>
 
           <div className="relative my-8 text-center">
