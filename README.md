@@ -9,9 +9,8 @@
 [![Stars](https://img.shields.io/github/stars/DanielDeshmukh/aether?style=flat-square&color=yellow)](https://github.com/DanielDeshmukh/aether/stargazers)
 [![NVIDIA NIM](https://img.shields.io/badge/AI-NVIDIA%20NIM-76B900?style=flat-square&logo=nvidia)](https://build.nvidia.com)
 [![License](https://img.shields.io/badge/License-Proprietary-FF4444?style=flat-square)](#license)
-[![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=flat-square&logo=next.js)](https://nextjs.org)
+[![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=next.js)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript)](https://typescriptlang.org)
-[![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python)](https://python.org)
 
 ---
 
@@ -40,96 +39,12 @@ Target URL  -->  Recon  -->  AI Planning  -->  Exploit Execution  -->  Validatio
 
 | Layer | Technology |
 |-------|-----------|
-| **Frontend** | Next.js 15, React 19, TypeScript, Tailwind CSS |
-| **Backend** | Python 3.12, Playwright, NVIDIA NIM (OpenAI-compatible API) |
+| **Frontend** | Next.js 16, React 19, TypeScript, Tailwind CSS |
+| **Backend** | Next.js API Routes, TypeScript |
 | **Database** | PostgreSQL 17, Prisma ORM |
 | **Auth** | Custom JWT with magic link authentication |
-| **AI Orchestration** | Nemotron 3 Super, Llama 3.3 Nemotron, DeepSeek V4 Flash |
+| **AI Orchestration** | NVIDIA NIM (Nemotron 3 Super, Llama 3.3 Nemotron, DeepSeek V4 Flash) |
 | **Browser Automation** | Playwright with headless Chromium |
-
----
-
-## Project Structure
-
-```
-aether/
-├── src/app/            # Next.js App Router (pages + API routes)
-├── src/lib/            # Auth, DB, email, API utilities
-├── prisma/             # Database schema (10 tables)
-├── public/             # Static assets
-└── backend/            # Python scanning engine (subprocess)
-    └── app/
-        ├── orchestrator/   # Brain, attack orchestrator
-        ├── engine/         # Heuristic, Playwright, validation lanes
-        ├── tools/          # Audit, headers, scanner, validators
-        └── services/       # Storage, domain verification
-```
-
----
-
-## Getting Started
-
-### Prerequisites
-- Node.js 18+
-- Python 3.12+
-- PostgreSQL 17+
-
-### Setup
-
-```bash
-# Clone
-git clone https://github.com/DanielDeshmukh/aether.git
-cd aether
-
-# Install dependencies
-cd aether && npm install
-cd ../aether/backend && pip install -r requirements.txt
-
-# Set up environment
-cp .env.example .env
-# Edit .env with your DATABASE_URL, NVIDIA_API_KEY, AETHER_JWT_SECRET
-
-# Sync database schema
-cd ../aether
-npx prisma db push
-
-# Start development
-cd ../aether && npm run dev
-```
-
-Open http://localhost:3000
-
-### Docker (Full Stack)
-
-```bash
-docker compose up --build
-```
-
-This starts PostgreSQL + the Next.js app with the Python scanning engine.
-
----
-
-## Deployment
-
-### Option 1: Railway / Fly.io (Full Functionality)
-
-The scan engine requires a Python subprocess, so **full functionality needs a server environment**.
-
-```bash
-# Railway
-railway init
-railway add --database postgres
-railway variables set NVIDIA_API_KEY=... AETHER_JWT_SECRET=... AETHER_USE_NVIDIA_ORCHESTRATOR=true
-railway up
-```
-
-### Option 2: Vercel (UI Only)
-
-The Next.js app deploys to Vercel. Scans won't execute (serverless can't spawn Python), but the UI, auth, and dashboard work.
-
-```bash
-vercel deploy
-```
 
 ---
 
