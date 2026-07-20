@@ -8,7 +8,13 @@ export const metadata: Metadata = {
   title: "AETHER | Automated Ethical Testing & Heuristic Evaluation Routine",
   description:
     "An autonomous penetration testing platform that reasons like a human security expert. Discovers, validates, and remediates web application vulnerabilities.",
-  icons: { icon: "/favicon.png" },
+  icons: {
+    icon: [
+      { url: "/favicon.png", type: "image/png" },
+      { url: "/images/logo.png", type: "image/png" },
+    ],
+    apple: "/images/logo.png",
+  },
 };
 
 export default function RootLayout({
