@@ -35,3 +35,7 @@ Thumbs.db
 
 # Docker
 aether/.next/
+.vercel
+
+# Personal
+aether-interview-prep.md
