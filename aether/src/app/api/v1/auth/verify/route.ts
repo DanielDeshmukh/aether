@@ -2,7 +2,6 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { hashToken, createAccessToken, createRefreshToken } from "@/lib/auth";
 import { apiError } from "@/lib/api-utils";
-import { NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get("token");
@@ -47,9 +46,20 @@ export async function GET(request: NextRequest) {
   const refreshToken = createRefreshToken(magicLink.userId);
 
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-  const callbackUrl = new URL("/auth/callback", frontendUrl);
-  callbackUrl.searchParams.set("access_token", accessToken);
-  callbackUrl.searchParams.set("refresh_token", refreshToken);
 
-  return NextResponse.redirect(callbackUrl);
+  const html = `<!DOCTYPE html>
+<html><head><title>Signing in...</title></head>
+<body>
+<script>
+document.cookie = "access_token=${accessToken}; path=/; max-age=3600; SameSite=Lax; Secure";
+document.cookie = "refresh_token=${refreshToken}; path=/; max-age=604800; SameSite=Lax; Secure";
+window.location.href = "${frontendUrl}/home";
+</script>
+<p>Signing you in...</p>
+</body></html>`;
+
+  return new Response(html, {
+    status: 200,
+    headers: { "Content-Type": "text/html" },
+  });
 }
