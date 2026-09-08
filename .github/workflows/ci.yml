@@ -10,6 +10,9 @@ jobs:
   nextjs:
     name: Next.js Build
     runs-on: ubuntu-latest
+    env:
+      AETHER_JWT_SECRET: ci-test-secret-do-not-use-in-production
+      DATABASE_URL: postgresql://unused:unused@localhost:5432/unused
     steps:
       - uses: actions/checkout@v4
 
