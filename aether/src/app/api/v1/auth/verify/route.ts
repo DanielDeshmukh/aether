@@ -44,22 +44,24 @@ export async function GET(request: NextRequest) {
 
   const accessToken = createAccessToken(magicLink.userId, magicLink.email);
   const refreshToken = createRefreshToken(magicLink.userId);
-
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
 
-  const html = `<!DOCTYPE html>
-<html><head><title>Signing in...</title></head>
-<body>
+  const html = `<!DOCTYPE html><html><head><title>AETHER</title></head><body>
 <script>
-document.cookie = "access_token=${accessToken}; path=/; max-age=3600; SameSite=Lax; Secure";
-document.cookie = "refresh_token=${refreshToken}; path=/; max-age=604800; SameSite=Lax; Secure";
-window.location.href = "${frontendUrl}/home";
+(function(){
+  var t=${JSON.stringify(accessToken)};
+  var r=${JSON.stringify(refreshToken)};
+  var u=${JSON.stringify(frontendUrl + "/home")};
+  document.cookie="access_token="+t+"; path=/; max-age=3600; SameSite=Lax; Secure";
+  document.cookie="refresh_token="+r+"; path=/; max-age=604800; SameSite=Lax; Secure";
+  window.location.replace(u);
+})();
 </script>
 <p>Signing you in...</p>
 </body></html>`;
 
   return new Response(html, {
     status: 200,
-    headers: { "Content-Type": "text/html" },
+    headers: { "Content-Type": "text/html; charset=utf-8" },
   });
 }
