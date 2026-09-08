@@ -47,23 +47,9 @@ export async function GET(request: NextRequest) {
   const refreshToken = createRefreshToken(magicLink.userId);
 
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-  const redirectUrl = new URL("/home", frontendUrl);
+  const callbackUrl = new URL("/auth/callback", frontendUrl);
+  callbackUrl.searchParams.set("access_token", accessToken);
+  callbackUrl.searchParams.set("refresh_token", refreshToken);
 
-  const response = NextResponse.redirect(redirectUrl);
-  response.cookies.set("access_token", accessToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 60 * 60,
-    path: "/",
-  });
-  response.cookies.set("refresh_token", refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 7 * 24 * 60 * 60,
-    path: "/",
-  });
-
-  return response;
+  return NextResponse.redirect(callbackUrl);
 }

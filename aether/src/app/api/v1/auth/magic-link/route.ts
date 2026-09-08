@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
   });
 
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-  const verifyUrl = `${frontendUrl}/auth/callback?token=${rawToken}`;
+  const verifyUrl = `${frontendUrl}/api/v1/auth/verify?token=${rawToken}`;
 
   try {
     const { sendMagicLinkEmail } = await import("@/lib/email");
